@@ -32,12 +32,20 @@ UM_TIMES = (('2020-07-01 04:00', '2020-07-11 03:00'), {'freq': 'H'}) # args, kwa
 slurm_config = {'account': 'short4hr', 'queue': 'short-serial-4hr', 'mem': 64000}
 rmk = Remake(config=dict(slurm=slurm_config, content_checks=False))
 
+expt_var = [
+    (e, v)
+    # for e, v in product(EXPT_SIM, ['precip', 'mcsp_calling_freq'])
+    for e, v in product(EXPT_SIM, ['mcsp_calling_freq'])
+    if not (e == 'ctrl' and v == 'mcsp_calling_freq')
+]
 
-class N216ExtractCombinePrecip(TaskRule):
-    """Extract and combine precipitation at all times and for all EMs.
+
+
+class N216ExtractCombineVar(TaskRule):
+    """Extract and combine UM var at all times and for all EMs.
     """
     @staticmethod
-    def rule_inputs(expt):
+    def rule_inputs(expt, var):
         suite = EXPT_SIM[expt]
         inputs = {
             f'pa_em{em_idx}_{h:03d}': SIMDIR / f'{suite}/share/cycle/20200701T0000Z/engl/um/em{em_idx}/englaa_pa{h:03d}.iris.nc'
@@ -47,57 +55,72 @@ class N216ExtractCombinePrecip(TaskRule):
         return inputs
 
     @staticmethod
-    def rule_outputs(expt):
+    def rule_outputs(expt, var):
         suite = EXPT_SIM[expt]
         outputs = {
-            f'pflux': SIMDIR / f'{suite}/processed/{expt}/engla_pa.precip.nc'
+            f'output': SIMDIR / f'{suite}/processed/{expt}/engla_pa.{var}.nc'
         }
         return outputs
 
 
     var_matrix = {
-        'expt': list(EXPT_SIM.keys())
+        ('expt', 'var'): expt_var
     }
 
     def rule_run(self):
-        def load_em_pflux(inputs, ens_idx):
+        def load_em_var(um_var, inputs, ens_idx):
             keep_coords = ['time', 'latitude', 'longitude']
-            time_pfluxes = []
+            time_das = []
 
             for h in range(0, 217, 24):
                 self.logger.debug(f'  Opening time {h}')
 
                 em_path = inputs[f'pa_em{ens_idx}_{h:03d}']
                 dsa = xr.open_dataset(em_path)
-                # What's the difference between the two fluxes?
-                # dsa.precipitation_flux has no time mean (i.e. it's instantaneous)
-                # dsa.precipitation_flux_0 has 1-hr time mean.
-                # I think it's better to use instantaneous to e.g. compare with IMERG.
-                pflux = dsa.precipitation_flux
+                da = dsa[um_var]
                 # Why does time 0 have different names for all variables?
                 if h == 0:
-                    pflux = pflux.rename(time_0='time')
+                    if um_var == 'precipitation_flux':
+                        da = da.rename(time_0='time')
+                    elif um_var == 'm01s05i993':
+                        da = da.rename(time_1='time')
+                else:
+                    if um_var == 'm01s05i993':
+                        da = da.rename(time_0='time')
                 # Drop all variables that are not needed. This means concat will work.
                 # (This drops all other coords with _0 suffix.)
-                coord_names = [c.name for c in list(pflux.coords.values())]
+                coord_names = [c.name for c in list(da.coords.values())]
                 drop_coords = sorted(set(coord_names) - set(keep_coords))
-                pflux = pflux.drop_vars(drop_coords)
+                da = da.drop_vars(drop_coords)
 
-                time_pfluxes.append(pflux)
+                time_das.append(da)
 
-            pflux = xr.concat(time_pfluxes, dim='time')
+            pflux = xr.concat(time_das, dim='time')
             return pflux.load()
 
         em_pfluxes = []
+        if self.var == 'precip':
+            # What's the difference between the two fluxes?
+            # dsa.precipitation_flux has no time mean (i.e. it's instantaneous)
+            # dsa.precipitation_flux_0 has 1-hr time mean.
+            # I think it's better to use instantaneous to e.g. compare with IMERG.
+            um_var = 'precipitation_flux'
+        elif self.var == 'mcsp_calling_freq':
+            # This uses a 1-h time mean.
+            um_var = 'm01s05i993'
+
         for ens_idx in range(N_ENS_MEM):
             self.logger.info(f'Loading EM {ens_idx}')
-            em_pfluxes.append(load_em_pflux(self.inputs, ens_idx))
-        pflux = xr.concat(em_pfluxes, dim=pd.Index(range(N_ENS_MEM), name='ens_mem'))
+            em_pfluxes.append(load_em_var(um_var, self.inputs, ens_idx))
 
-        pflux.attrs['UM simulation'] = EXPT_SIM[self.expt]
-        pflux.attrs['MCS:PRIME expt'] = self.expt
+        da = xr.concat(em_pfluxes, dim=pd.Index(range(N_ENS_MEM), name='ens_mem'))
+        da.attrs['UM simulation'] = EXPT_SIM[self.expt]
+        da.attrs['MCS:PRIME expt'] = self.expt
+        if self.var == 'mcsp_calling_freq':
+            da.attrs['UM name'] = um_var
+            da.rename(self.var)
 
-        cu.to_netcdf_tmp_then_copy(pflux, self.outputs['pflux'])
+        cu.to_netcdf_tmp_then_copy(da, self.outputs['output'])
 
 
 class RegridImergToN216(TaskRule):
@@ -118,7 +141,7 @@ class RegridImergToN216(TaskRule):
             )
             for t in times
         }
-        inputs['pflux'] = N216ExtractCombinePrecip.rule_outputs('stochMCSP')['pflux']
+        inputs['pflux'] = N216ExtractCombineVar.rule_outputs('stochMCSP', 'precip')['output']
 
         return inputs
 
