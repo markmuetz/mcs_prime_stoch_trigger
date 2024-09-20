@@ -23,8 +23,8 @@ rmk = Remake(config=dict(slurm=slurm_config, content_checks=False))
 PP_DIRS = []
 # /gws/nopw/j04/mcs_prime/mmuetz/data/UM_sims/u-dg135/share/cycle/20200701T0000Z/engl/um/em0
 PP_DIRS.extend([DATADIR / f'UM_sims/u-dg135/share/cycle/20200701T0000Z/engl/um/em{i}' for i in range(10)])
-PP_DIRS.extend([DATADIR / f'UM_sims/u-di728/share/cycle/20200701T0000Z/engl/um/em{i}' for i in range(10)])
-PP_DIRS.extend([DATADIR / f'UM_sims/u-di727/share/cycle/20200701T0000Z/engl/um/em{i}' for i in range(10)])
+# PP_DIRS.extend([DATADIR / f'UM_sims/u-di728/share/cycle/20200701T0000Z/engl/um/em{i}' for i in range(10)])
+# PP_DIRS.extend([DATADIR / f'UM_sims/u-di727/share/cycle/20200701T0000Z/engl/um/em{i}' for i in range(10)])
 # PP_DIRS.extend([DATADIR / f'UM_sims/zhixiao_mirror/ens_um/pa_um_off'])
 # PP_DIRS.extend([DATADIR / f'UM_sims/zhixiao_mirror/ens_um_corrected/pa_um_on'])
 

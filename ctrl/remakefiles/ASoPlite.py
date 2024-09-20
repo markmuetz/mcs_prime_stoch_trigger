@@ -4,11 +4,14 @@ import cartopy.crs as ccrs
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 from matplotlib.ticker import FuncFormatter
+import matplotlib.ticker as mticker
+from matplotlib.lines import Line2D
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 import scipy.stats
 import seaborn as sns
+import shapely
 import xarray as xr
 
 from remake2 import Remake, TaskRule
@@ -368,6 +371,51 @@ class ASoPN216regional(TaskRule):
         asop = ASoPlite(da_precip, self.coarsen_time)
         asop.calc_all()
         cu.to_netcdf_tmp_then_copy(asop.ds, self.outputs['output'])
+
+
+class PlotRegions(TaskRule):
+    @staticmethod
+    def rule_inputs():
+        return {}
+
+    @staticmethod
+    def rule_outputs():
+        fig_asop_dir = cu.PATHS['figdir'] / 'ASoP' / 'dev'
+        return {'asop_regs': fig_asop_dir / f'asop.regions.png'}
+
+    def rule_run(self):
+        fig, ax = plt.subplots(figsize=(12, 6), layout='constrained', subplot_kw={'projection': ccrs.PlateCarree()})
+        ax.coastlines()
+        gl = ax.gridlines(crs=ccrs.PlateCarree(), draw_labels=True, linewidth=1, color='gray')
+        gl.xlocator = mticker.FixedLocator(np.arange(-180, 181, 45))
+        gl.ylocator = mticker.FixedLocator(np.arange(-90, 90, 45))
+
+        gl.top_labels = False
+        gl.right_labels = False
+        def f0_360to_m180_180(vs):
+            return np.where(vs > 180, vs - 360, vs)
+
+        colours = plt.rcParams['axes.prop_cycle'].by_key()['color']
+        custom_lines = []
+
+        for c, (bname, bcoords) in zip(colours, REGIONS.items()):
+            if bname == 'eq_warm_pool':
+                lw = 4
+                zorder = 1
+            else:
+                lw = 2
+                zorder = 0
+            if bname == 'eq_band':
+                minx, maxx, miny, maxy = (-180, 180, -10, 10)
+            else:
+                minx, maxx, miny, maxy = f0_360to_m180_180(np.array(bcoords))
+            bpoints = ((minx, miny), (minx, maxy), (maxx, maxy), (maxx, miny))
+            box = shapely.geometry.LinearRing(bpoints)
+            # Add geometry for each nested grid size.
+            ax.add_geometries([box], crs=ccrs.PlateCarree(), edgecolor=c, facecolor='none', lw=lw, zorder=zorder)
+            custom_lines.append(Line2D([0], [0], color=c, lw=lw))
+        ax.legend(custom_lines, REGIONS)
+        plt.savefig(self.outputs['asop_regs'])
 
 
 class PlotASoPN216regional(TaskRule):

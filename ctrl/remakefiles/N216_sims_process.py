@@ -9,6 +9,7 @@ import scipy.stats
 import xarray as xr
 import xesmf as xe
 
+from remake.util import sysrun
 from remake2 import Remake, TaskRule
 
 import mcs_prime.mcs_prime_config_util as cu
@@ -38,6 +39,7 @@ expt_var = [
     for e, v in product(EXPT_SIM, ['mcsp_calling_freq'])
     if not (e == 'ctrl' and v == 'mcsp_calling_freq')
 ]
+# expt_var.append(('stochMCSP', 'tcwv'))
 
 
 
@@ -82,10 +84,10 @@ class N216ExtractCombineVar(TaskRule):
                 if h == 0:
                     if um_var == 'precipitation_flux':
                         da = da.rename(time_0='time')
-                    elif um_var == 'm01s05i993':
+                    elif um_var in ['m01s05i993', 'm01s30i261']:
                         da = da.rename(time_1='time')
                 else:
-                    if um_var == 'm01s05i993':
+                    if um_var in ['m01s05i993', 'm01s30i261']:
                         da = da.rename(time_0='time')
                 # Drop all variables that are not needed. This means concat will work.
                 # (This drops all other coords with _0 suffix.)
@@ -108,6 +110,9 @@ class N216ExtractCombineVar(TaskRule):
         elif self.var == 'mcsp_calling_freq':
             # This uses a 1-h time mean.
             um_var = 'm01s05i993'
+        elif self.var == 'tcwv':
+            # This uses a 1-h time mean.
+            um_var = 'm01s30i261'
 
         for ens_idx in range(N_ENS_MEM):
             self.logger.info(f'Loading EM {ens_idx}')
@@ -172,6 +177,31 @@ class RegridImergToN216(TaskRule):
         regridder = xe.Regridder(imerg.precipitation, pflux, method='bilinear')
         imerg_N216 = regridder(imerg.precipitation)
         cu.to_netcdf_tmp_then_copy(imerg_N216, self.outputs['output'])
+
+
+class ZenodoTarball(TaskRule):
+    @staticmethod
+    def rule_inputs():
+        inputs = {}
+        for expt, var in expt_var:
+            suite = EXPT_SIM[expt]
+            inputs[f'input_{expt}_{var}'] = N216ExtractCombineVar.rule_outputs(expt, var)['output']
+        return inputs
+
+    @staticmethod
+    def rule_outputs():
+        outputs = {
+            f'output': SIMDIR / f'N216ens.tar.gz'
+        }
+        return outputs
+
+
+    def rule_run(self):
+        outpath = self.outputs['output']
+        inpaths = ' '.join(str(p) for p in self.inputs.values())
+        cmd = f'tar czf {outpath} -C {SIMDIR} {inpaths}'
+        print(cmd)
+        sysrun(cmd)
 
 
 class PlotTotalPrecip(TaskRule):
