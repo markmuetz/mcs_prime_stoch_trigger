@@ -41,91 +41,10 @@ expt_var = [
 ]
 # expt_var.append(('stochMCSP', 'tcwv'))
 
-
-
-class N216ExtractCombineVar(TaskRule):
-    """Extract and combine UM var at all times and for all EMs.
-    """
-    @staticmethod
-    def rule_inputs(expt, var):
-        suite = EXPT_SIM[expt]
-        inputs = {
-            f'pa_em{em_idx}_{h:03d}': SIMDIR / f'{suite}/share/cycle/20200701T0000Z/engl/um/em{em_idx}/englaa_pa{h:03d}.iris.nc'
-            for em_idx in range(N_ENS_MEM)
-            for h in range(0, 217, 24)
-        }
-        return inputs
-
-    @staticmethod
-    def rule_outputs(expt, var):
-        suite = EXPT_SIM[expt]
-        outputs = {
-            f'output': SIMDIR / f'{suite}/processed/{expt}/engla_pa.{var}.nc'
-        }
-        return outputs
-
-
-    var_matrix = {
-        ('expt', 'var'): expt_var
-    }
-
-    def rule_run(self):
-        def load_em_var(um_var, inputs, ens_idx):
-            keep_coords = ['time', 'latitude', 'longitude']
-            time_das = []
-
-            for h in range(0, 217, 24):
-                self.logger.debug(f'  Opening time {h}')
-
-                em_path = inputs[f'pa_em{ens_idx}_{h:03d}']
-                dsa = xr.open_dataset(em_path)
-                da = dsa[um_var]
-                # Why does time 0 have different names for all variables?
-                if h == 0:
-                    if um_var == 'precipitation_flux':
-                        da = da.rename(time_0='time')
-                    elif um_var in ['m01s05i993', 'm01s30i261']:
-                        da = da.rename(time_1='time')
-                else:
-                    if um_var in ['m01s05i993', 'm01s30i261']:
-                        da = da.rename(time_0='time')
-                # Drop all variables that are not needed. This means concat will work.
-                # (This drops all other coords with _0 suffix.)
-                coord_names = [c.name for c in list(da.coords.values())]
-                drop_coords = sorted(set(coord_names) - set(keep_coords))
-                da = da.drop_vars(drop_coords)
-
-                time_das.append(da)
-
-            pflux = xr.concat(time_das, dim='time')
-            return pflux.load()
-
-        em_pfluxes = []
-        if self.var == 'precip':
-            # What's the difference between the two fluxes?
-            # dsa.precipitation_flux has no time mean (i.e. it's instantaneous)
-            # dsa.precipitation_flux_0 has 1-hr time mean.
-            # I think it's better to use instantaneous to e.g. compare with IMERG.
-            um_var = 'precipitation_flux'
-        elif self.var == 'mcsp_calling_freq':
-            # This uses a 1-h time mean.
-            um_var = 'm01s05i993'
-        elif self.var == 'tcwv':
-            # This uses a 1-h time mean.
-            um_var = 'm01s30i261'
-
-        for ens_idx in range(N_ENS_MEM):
-            self.logger.info(f'Loading EM {ens_idx}')
-            em_pfluxes.append(load_em_var(um_var, self.inputs, ens_idx))
-
-        da = xr.concat(em_pfluxes, dim=pd.Index(range(N_ENS_MEM), name='ens_mem'))
-        da.attrs['UM simulation'] = EXPT_SIM[self.expt]
-        da.attrs['MCS:PRIME expt'] = self.expt
-        if self.var == 'mcsp_calling_freq':
-            da.attrs['UM name'] = um_var
-            da.rename(self.var)
-
-        cu.to_netcdf_tmp_then_copy(da, self.outputs['output'])
+# STASHCODES:
+# m01s05i216: precip (instantaneous)
+# m01s05i993: calling freq (1-h mean)
+# m01s30i461: TCWV (1-h mean)
 
 
 class RegridImergToN216(TaskRule):
@@ -146,7 +65,7 @@ class RegridImergToN216(TaskRule):
             )
             for t in times
         }
-        inputs['pflux'] = N216ExtractCombineVar.rule_outputs('stochMCSP', 'precip')['output']
+        inputs['n216ds'] = SIMDIR / 'u-dg135/share/cycle/20200701T0000Z/engl/um/englaa_pa.merged.20200701T0000Z.u-dg135.m01s05i216.nc'
 
         return inputs
 
@@ -169,39 +88,74 @@ class RegridImergToN216(TaskRule):
     }
 
     def rule_run(self):
-        pflux = xr.open_dataarray(self.inputs['pflux'])
+        # MUST be a dataset to add bounds correctly. Bounds needed for conservative regrid.
+        n216ds = xr.open_dataset(self.inputs['n216ds'])
         imerg = xr.open_mfdataset([v for k, v in self.inputs.items() if k.startswith('imerg')])
-        print(pflux)
         print(imerg)
-        # TODO: conservative method.
-        regridder = xe.Regridder(imerg.precipitation, pflux, method='bilinear')
-        imerg_N216 = regridder(imerg.precipitation)
-        cu.to_netcdf_tmp_then_copy(imerg_N216, self.outputs['output'])
+        print(n216ds)
+        # print('adding bounds to imerg and n216ds')
+        # imerg_bounds = imerg.cf.add_bounds(['lat', 'lon'])
+        # n216ds_bounds = n216ds.cf.add_bounds(['latitude', 'longitude']).drop_dims(['latitude_0', 'longitude_0'])
+        # n216ds_bounds = n216ds.cf.add_bounds(['latitude', 'longitude'])
+
+        # Used conservative method.
+        # regridder = xe.Regridder(imerg, pflux, method='bilinear')
+        imerg_regridder = xe.Regridder(imerg, n216ds, method='conservative', periodic=True)
+        n216imerg = imerg_regridder(imerg.precipitation)
+        cu.to_netcdf_tmp_then_copy(n216imerg, self.outputs['output'])
 
 
-class ZenodoTarball(TaskRule):
+class RegridERA5ToN216(TaskRule):
+    """Regrid ERA5 to the same grid as N216 simulations.
+    """
     @staticmethod
-    def rule_inputs():
-        inputs = {}
-        for expt, var in expt_var:
-            suite = EXPT_SIM[expt]
-            inputs[f'input_{expt}_{var}'] = N216ExtractCombineVar.rule_outputs(expt, var)['output']
+    def rule_inputs(times_args, var):
+        # Just load IMERG on the hour "S??0000".
+        args, kwargs = times_args
+        times = pd.date_range(*args, **kwargs)
+        def h_to_m(h):
+            return h * 60
+        inputs = {
+            f'era5_{t}': cu.era5_sfc_fmtp(var, t.year, t.month, t.day, t.hour)
+            for t in times
+        }
+        inputs['n216ds'] = SIMDIR / 'u-dg135/share/cycle/20200701T0000Z/engl/um/englaa_pa.merged.20200701T0000Z.u-dg135.m01s05i216.nc'
+
         return inputs
 
     @staticmethod
-    def rule_outputs():
+    def rule_outputs(times_args, var):
+        args, kwargs = times_args
+        times = pd.date_range(*args, **kwargs)
+        d0 = str(times[0]).replace(' ', '_')
+        dlast = str(times[-1]).replace(' ', '_')
         outputs = {
-            f'output': SIMDIR / f'N216ens.tar.gz'
+            'output': (
+                cu.PATHS['outdir']
+                / f'era5_processed/N216grid/{d0}-{dlast}/ecmwf-era5_oper_an_sfc_{d0}-{dlast}.{var}.nc'
+            )
         }
         return outputs
 
+    var_matrix = {
+        'times_args': [UM_TIMES],
+        'var': ['tcwv'],
+    }
 
     def rule_run(self):
-        outpath = self.outputs['output']
-        inpaths = ' '.join(str(p) for p in self.inputs.values())
-        cmd = f'tar czf {outpath} -C {SIMDIR} {inpaths}'
-        print(cmd)
-        sysrun(cmd)
+        # MUST be a dataset to add bounds correctly. Bounds needed for conservative regrid.
+        n216ds = xr.open_dataset(self.inputs['n216ds'])
+        era5ds = xr.open_mfdataset([v for k, v in self.inputs.items() if k.startswith('era5')])
+        print(era5ds)
+        print(n216ds)
+        print('adding bounds to era5ds and n216ds')
+        era5ds_bounds = era5ds.cf.add_bounds(['latitude', 'longitude'])
+        # n216ds_bounds = n216ds.cf.add_bounds(['latitude', 'longitude'])
+
+        # Used conservative method.
+        e5regridder = xe.Regridder(era5ds_bounds, n216ds, method='conservative', periodic=True)
+        n216era5da = e5regridder(era5ds[self.var])
+        cu.to_netcdf_tmp_then_copy(n216era5da, self.outputs['output'])
 
 
 class PlotTotalPrecip(TaskRule):
@@ -210,10 +164,14 @@ class PlotTotalPrecip(TaskRule):
         inputs = {}
         for expt in EXPT_SIM:
             suite = EXPT_SIM[expt]
-            inputs[f'pflux_{expt}'] = SIMDIR / f'{suite}/processed/{expt}/engla_pa.precip.nc'
+            inputs[f'pflux_{expt}'] = (
+                SIMDIR /
+                f'{suite}/share/cycle/20200701T0000Z/engl/um/'
+                f'englaa_pa.merged.20200701T0000Z.{suite}.m01s05i216.nc'
+            )
+            # inputs[f'pflux_{expt}'] = SIMDIR / f'{suite}/processed/{expt}/engla_pa.precip.nc'
         inputs['imerg'] = RegridImergToN216.rule_outputs(UM_TIMES)['output']
         return inputs
-
 
     @staticmethod
     def rule_outputs():
@@ -222,7 +180,8 @@ class PlotTotalPrecip(TaskRule):
     def rule_run(self):
         expt_pflux = {}
         for expt in EXPT_SIM:
-            pflux = xr.load_dataarray(self.inputs[f'pflux_{expt}'])
+            print(expt)
+            pflux = xr.load_dataset(self.inputs[f'pflux_{expt}']).precipitation_flux
             pflux.values *= 3600
             pflux.attrs['units'] = 'mm h-1'
             expt_pflux[expt] = pflux
@@ -233,7 +192,7 @@ class PlotTotalPrecip(TaskRule):
         ax2 = ax.twinx()
         ax.plot(range(len(imerg.time)), imerg_ts, c='k', label='IMERG')
         for expt in EXPT_SIM:
-            pflux_ts = expt_pflux[expt].mean(dim=['ens_mem', 'latitude', 'longitude'])
+            pflux_ts = expt_pflux[expt].mean(dim=['realization', 'latitude', 'longitude'])
             l, = ax.plot(range(len(pflux_ts.time)), pflux_ts, label=expt)
             ax2.plot(range(len(pflux_ts.time)), pflux_ts.values / imerg_ts.values * 100, c=l.get_color(), ls='--', label=expt)
         ax.set_xlabel('Days since start')
@@ -299,7 +258,11 @@ class GuassianFilterExpt(TaskRule):
     @staticmethod
     def rule_inputs(expt):
         suite = EXPT_SIM[expt]
-        inputs = {'pflux': SIMDIR / f'{suite}/processed/{expt}/engla_pa.precip.nc'}
+        inputs = {'pflux': (
+            SIMDIR /
+            f'{suite}/share/cycle/20200701T0000Z/engl/um/'
+            f'englaa_pa.merged.20200701T0000Z.{suite}.m01s05i216.nc'
+        )}
         return inputs
 
     @staticmethod
@@ -313,7 +276,7 @@ class GuassianFilterExpt(TaskRule):
     }
 
     def rule_run(self):
-        pflux = xr.load_dataarray(self.inputs['pflux'])
+        pflux = xr.open_dataset(self.inputs['pflux']).precipitation_flux.load()
         pflux.values *= 3600
         pflux.attrs['units'] = 'mm h-1'
         pflux_tropics = pflux.sel(**sel_tropics)
@@ -371,7 +334,7 @@ class Calc_eRMSE(TaskRule):
             eRMSE_data,
             coords={
                 'sigma': pflux_filtered['sigma'],
-                'ens_mem': pflux_filtered['ens_mem'],
+                'realization': pflux_filtered['realization'],
                 'time': pflux_filtered['time'],
             }
         )
@@ -415,8 +378,8 @@ class Calc_dRMSE(TaskRule):
             dRMSE_data,
             coords={
                 'sigma': pflux_filtered['sigma'],
-                'ens_mem1': pflux_filtered['ens_mem'].values,
-                'ens_mem2': pflux_filtered['ens_mem'].values,
+                'realization1': pflux_filtered['realization'].values,
+                'realization2': pflux_filtered['realization'].values,
                 'time': pflux_filtered['time'],
             }
         )
@@ -439,8 +402,8 @@ def plot_spread_skill_ts(expt_dRMSE, expt_eRMSE, smooth=False, xlim='full', show
         for i, expt in enumerate(EXPT_SIM):
             # dRMSE_ts = np.nanmean(expt_dRMSE[expt], axis=(0, 1))
             # eRMSE_ts = np.nanmean(expt_eRMSE[expt], axis=0)
-            dRMSE_ts = expt_dRMSE[expt].mean(dim=['ens_mem1', 'ens_mem2']).sel(sigma=sigma).values
-            eRMSE_ts = expt_eRMSE[expt].mean(dim=['ens_mem']).sel(sigma=sigma).values
+            dRMSE_ts = expt_dRMSE[expt].mean(dim=['realization1', 'realization2']).sel(sigma=sigma).values
+            eRMSE_ts = expt_eRMSE[expt].mean(dim=['realization']).sel(sigma=sigma).values
             if smooth:
                 dRMSE_ts = np.convolve(dRMSE_ts, np.ones((smooth, )) / smooth, mode='same')
                 eRMSE_ts = np.convolve(eRMSE_ts, np.ones((smooth, )) / smooth, mode='same')
@@ -516,6 +479,7 @@ class PlotSpreadSkill(TaskRule):
 
 
 class CalcAutocorrImerg(TaskRule):
+    enabled = False
     @staticmethod
     def rule_inputs():
         inputs = {'imerg': RegridImergToN216.rule_outputs(UM_TIMES)['output']}
@@ -555,6 +519,7 @@ class CalcAutocorrImerg(TaskRule):
 
 
 class CalcAutocorrExpt(TaskRule):
+    enabled = False
     @staticmethod
     def rule_inputs(expt):
         suite = EXPT_SIM[expt]
@@ -572,10 +537,10 @@ class CalcAutocorrExpt(TaskRule):
     }
 
     def rule_run(self):
-        pflux = xr.load_dataarray(self.inputs['pflux'])
+        pflux = xr.load_dataset(self.inputs['pflux']).precipitation_flux.load()
         pflux.values *= 3600
         pflux.attrs['units'] = 'mm h-1'
-        nens = len(pflux.ens_mem)
+        nens = len(pflux.realization)
         nlat = len(pflux.latitude)
         nlon = len(pflux.longitude)
 
@@ -594,6 +559,7 @@ class CalcAutocorrExpt(TaskRule):
 
 
 class PlotAutocorr(TaskRule):
+    enabled = False
     @staticmethod
     def rule_inputs():
         inputs = {}
@@ -617,21 +583,21 @@ class PlotAutocorr(TaskRule):
         axes[0, 0].coastlines()
 
         for ax, expt_ac in zip(axes[0, 1:], expts_ac.values()):
-            im = ax.pcolormesh(expt_ac.longitude, expt_ac.latitude, expt_ac.pflux_autocorr.mean(dim='ens_mem'), vmin=0, vmax=1)
+            im = ax.pcolormesh(expt_ac.longitude, expt_ac.latitude, expt_ac.pflux_autocorr.mean(dim='realization'), vmin=0, vmax=1)
             # plt.colorbar(im, ax=ax)
             ax.coastlines()
 
         plt.colorbar(im, ax=axes[0, -1])
 
         for ax, expt_ac in zip(axes[1, 1:], expts_ac.values()):
-            im = ax.pcolormesh(expt_ac.longitude, expt_ac.latitude, expt_ac.pflux_autocorr.mean(dim='ens_mem') - imerg_ac.imerg_autocorr, vmin=-.4, vmax=.4, cmap='bwr')
+            im = ax.pcolormesh(expt_ac.longitude, expt_ac.latitude, expt_ac.pflux_autocorr.mean(dim='realization') - imerg_ac.imerg_autocorr, vmin=-.4, vmax=.4, cmap='bwr')
             # plt.colorbar(im, ax=ax)
             ax.coastlines()
 
         plt.colorbar(im, ax=axes[1, -1])
 
         for ax, expt_ac in zip(axes[2, 2:], list(expts_ac.values())[1:]):
-            im = ax.pcolormesh(expt_ac.longitude, expt_ac.latitude, expt_ac.pflux_autocorr.mean(dim='ens_mem') - expts_ac['ctrl'].pflux_autocorr.mean(dim='ens_mem'), vmin=-.2, vmax=.2, cmap='bwr')
+            im = ax.pcolormesh(expt_ac.longitude, expt_ac.latitude, expt_ac.pflux_autocorr.mean(dim='realization') - expts_ac['ctrl'].pflux_autocorr.mean(dim='realization'), vmin=-.2, vmax=.2, cmap='bwr')
             # plt.colorbar(im, ax=ax)
             ax.coastlines()
 
@@ -639,7 +605,7 @@ class PlotAutocorr(TaskRule):
 
 
         ax = axes[3, 3]
-        im = ax.pcolormesh(expt_ac.longitude, expt_ac.latitude, expts_ac['vanillaMCSP'].pflux_autocorr.mean(dim='ens_mem') - expts_ac['stochMCSP'].pflux_autocorr.mean(dim='ens_mem'), vmin=-.2, vmax=.2, cmap='bwr')
+        im = ax.pcolormesh(expt_ac.longitude, expt_ac.latitude, expts_ac['vanillaMCSP'].pflux_autocorr.mean(dim='realization') - expts_ac['stochMCSP'].pflux_autocorr.mean(dim='realization'), vmin=-.2, vmax=.2, cmap='bwr')
         # plt.colorbar(im, ax=ax)
         ax.coastlines()
 
