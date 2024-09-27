@@ -3,6 +3,7 @@ from itertools import product
 
 import cartopy.crs as ccrs
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 import scipy.ndimage as ndimage
 import numpy as np
 import scipy.stats
@@ -36,7 +37,7 @@ class RegridImergToN216(TaskRule):
     """Regrid IMERG to the same grid as N216 simulations.
     """
     @staticmethod
-    def rule_inputs(case):
+    def rule_inputs(case, regrid_method):
         # Just load IMERG on the hour "S??0000".
         times_args = conf.UM_TIMES[case]
         args, kwargs = times_args
@@ -56,7 +57,7 @@ class RegridImergToN216(TaskRule):
         return inputs
 
     @staticmethod
-    def rule_outputs(case):
+    def rule_outputs(case, regrid_method):
         times_args = conf.UM_TIMES[case]
         args, kwargs = times_args
         times = pd.date_range(*args, **kwargs)
@@ -65,13 +66,14 @@ class RegridImergToN216(TaskRule):
         outputs = {
             'output': (
                 conf.PATHS['outdir']
-                / f'imerg_processed/N216grid/{d0}-{dlast}/3B-HHR.MS.MRG.3IMERG.{d0}-{dlast}.hourly.V07B.nc'
+                / f'imerg_processed/N216grid/{d0}-{dlast}/N216.{regrid_method}.3B-HHR.MS.MRG.3IMERG.{d0}-{dlast}.hourly.V07B.nc'
             )
         }
         return outputs
 
     var_matrix = {
         'case': conf.CASES,
+        'regrid_method': ['cons', 'non_cons'],
     }
 
     def rule_run(self):
@@ -80,15 +82,15 @@ class RegridImergToN216(TaskRule):
         imerg = xr.open_mfdataset([v for k, v in self.inputs.items() if k.startswith('imerg')])
         print(imerg)
         print(n216ds)
-        # print('adding bounds to imerg and n216ds')
-        # imerg_bounds = imerg.cf.add_bounds(['lat', 'lon'])
-        # n216ds_bounds = n216ds.cf.add_bounds(['latitude', 'longitude']).drop_dims(['latitude_0', 'longitude_0'])
-        # n216ds_bounds = n216ds.cf.add_bounds(['latitude', 'longitude'])
 
-        # Used conservative method.
-        # regridder = xe.Regridder(imerg, pflux, method='bilinear')
-        # imerg_regridder = xe.Regridder(imerg, n216ds, method='conservative', periodic=True)
-        imerg_regridder = xe.Regridder(imerg, n216ds, method='bilinear')
+        if self.regrid_method == 'cons':
+            # Use conservative method.
+            # Note, this has a far larger effect than I anticipated.
+            # It changes to interp. of the spread-skill plots substantially, so that
+            # vanillaMCSP is best for no spatial avging.
+            imerg_regridder = xe.Regridder(imerg, n216ds, method='conservative', periodic=True)
+        else:
+            imerg_regridder = xe.Regridder(imerg, n216ds, method='bilinear')
         n216imerg = imerg_regridder(imerg.precipitation)
         utils.to_netcdf_tmp_then_copy(n216imerg, self.outputs['output'])
 
@@ -150,7 +152,7 @@ class RegridERA5ToN216(TaskRule):
 
 class PlotTotalPrecip(TaskRule):
     @staticmethod
-    def rule_inputs(case):
+    def rule_inputs(case, regrid_method, ens):
         inputs = {}
         for expt in conf.EXPT_SIM:
             suite = conf.EXPT_SIM[expt]
@@ -160,14 +162,18 @@ class PlotTotalPrecip(TaskRule):
                 f'englaa_pa.merged.{case}.{suite}.m01s05i216.nc'
             )
             # inputs[f'pflux_{expt}'] = conf.SIMDIR / f'{suite}/processed/{expt}/engla_pa.precip.nc'
-        inputs['imerg'] = RegridImergToN216.rule_outputs(case)['output']
+        inputs['imerg'] = RegridImergToN216.rule_outputs(case, regrid_method)['output']
         return inputs
 
     @staticmethod
-    def rule_outputs(case):
-        return {'fig': conf.PATHS['figdir'] / 'N216sims' / case / f'total_precip.{case}.noncons.png'}
+    def rule_outputs(case, regrid_method, ens):
+        return {'fig': conf.PATHS['figdir'] / 'N216sims' / case / f'total_precip.{case}.{regrid_method}.ens_{ens}.png'}
 
-    var_matrix = {'case': conf.CASES}
+    var_matrix = {
+        'case': conf.CASES,
+        'regrid_method': ['cons', 'non_cons'],
+        'ens': ['full', 'red'],
+    }
 
     def rule_run(self):
         expt_pflux = {}
@@ -176,7 +182,11 @@ class PlotTotalPrecip(TaskRule):
             pflux = xr.load_dataset(self.inputs[f'pflux_{expt}']).precipitation_flux
             pflux.values *= 3600
             pflux.attrs['units'] = 'mm h-1'
+            if self.ens == 'red':
+                pflux = pflux.isel(realization=slice(1, 10))
+                # print(pflux)
             expt_pflux[expt] = pflux
+
         imerg = xr.load_dataarray(self.inputs['imerg'])
         imerg_ts = imerg.mean(dim=['latitude', 'longitude'])
 
@@ -213,12 +223,12 @@ sigmas = [0, 1, 2, 4]
 
 class GuassianFilterN216Imerg(TaskRule):
     @staticmethod
-    def rule_inputs(case):
-        inputs = {'imerg': RegridImergToN216.rule_outputs(case)['output']}
+    def rule_inputs(case, regrid_method):
+        inputs = {'imerg': RegridImergToN216.rule_outputs(case, regrid_method)['output']}
         return inputs
 
     @staticmethod
-    def rule_outputs(case):
+    def rule_outputs(case, regrid_method):
         args, kwargs = conf.UM_TIMES[case]
         times = pd.date_range(*args, **kwargs)
         d0 = str(times[0]).replace(' ', '_')
@@ -226,12 +236,15 @@ class GuassianFilterN216Imerg(TaskRule):
         outputs = {
             'imerg_filtered': (
                 conf.PATHS['outdir']
-                / f'imerg_processed/N216grid/{d0}-{dlast}/guassian_filtered_3B-HHR.MS.MRG.3IMERG.{d0}-{dlast}.hourly.V07B.nc'
+                / f'imerg_processed/N216grid/{d0}-{dlast}/N216.{regrid_method}.guassian_filtered_3B-HHR.MS.MRG.3IMERG.{d0}-{dlast}.hourly.V07B.nc'
             )
         }
         return outputs
 
-    var_matrix = {'case': conf.CASES}
+    var_matrix = {
+        'case': conf.CASES,
+        'regrid_method': ['cons', 'non_cons'],
+    }
 
     def rule_run(self):
         imerg = xr.load_dataarray(self.inputs['imerg'])
@@ -295,23 +308,24 @@ def rmse(a1, a2):
 
 class Calc_eRMSE(TaskRule):
     @staticmethod
-    def rule_inputs(expt, case):
+    def rule_inputs(expt, case, regrid_method):
         inputs = {
             'pflux_filtered': GuassianFilterExpt.rule_outputs(expt, case)['pflux_filtered'],
-            'imerg_filtered': GuassianFilterN216Imerg.rule_outputs(case)['imerg_filtered']
+            'imerg_filtered': GuassianFilterN216Imerg.rule_outputs(case, regrid_method)['imerg_filtered']
         }
         return inputs
 
 
     @staticmethod
-    def rule_outputs(expt, case):
+    def rule_outputs(expt, case, regrid_method):
         suite = conf.EXPT_SIM[expt]
-        outputs = {'eRMSE': conf.SIMDIR / f'{suite}/processed/{expt}/{case}/engla_pa.filtered_precip.eRMSE.nc'}
+        outputs = {'eRMSE': conf.SIMDIR / f'{suite}/processed/{expt}/{case}/engla_pa.filtered_precip.eRMSE.{regrid_method}.nc'}
         return outputs
 
     var_matrix = {
         'expt': list(conf.EXPT_SIM.keys()),
         'case': conf.CASES,
+        'regrid_method': ['cons', 'non_cons'],
     }
 
     def rule_run(self):
@@ -384,7 +398,7 @@ class Calc_dRMSE(TaskRule):
 
 
 plot_sigmas = [0, 2, 4]
-def plot_spread_skill_ts(expt_dRMSE, expt_eRMSE, smooth=False, xlim='full', show_skill_minus_spread=False):
+def plot_spread_skill_ts(expt_dRMSE, expt_eRMSE, smooth=False, xlim='full', show_skill_minus_spread=False, ens='full'):
     ntime = len(expt_eRMSE['ctrl'].time)
 
     fig, axes = plt.subplots(1, len(plot_sigmas), sharex=True, layout='constrained')
@@ -399,7 +413,10 @@ def plot_spread_skill_ts(expt_dRMSE, expt_eRMSE, smooth=False, xlim='full', show
         for i, expt in enumerate(conf.EXPT_SIM):
             # dRMSE_ts = np.nanmean(expt_dRMSE[expt], axis=(0, 1))
             # eRMSE_ts = np.nanmean(expt_eRMSE[expt], axis=0)
-            dRMSE_ts = expt_dRMSE[expt].mean(dim=['realization1', 'realization2']).sel(sigma=sigma).values
+            dRMSE = expt_dRMSE[expt]
+            if ens == 'red':
+                dRMSE = dRMSE.sel(realization1=slice(1, 10), realization2=slice(1, 10))
+            dRMSE_ts = dRMSE.mean(dim=['realization1', 'realization2']).sel(sigma=sigma).values
             eRMSE_ts = expt_eRMSE[expt].mean(dim=['realization']).sel(sigma=sigma).values
             if smooth:
                 dRMSE_ts = np.convolve(dRMSE_ts, np.ones((smooth, )) / smooth, mode='same')
@@ -438,9 +455,9 @@ def plot_spread_skill_ts(expt_dRMSE, expt_eRMSE, smooth=False, xlim='full', show
 
 class PlotSpreadSkill(TaskRule):
     @staticmethod
-    def rule_inputs(kwargs, case):
+    def rule_inputs(kwargs, case, regrid_method):
         inputs = {
-            f'{expt}_eRMSE': Calc_eRMSE.rule_outputs(expt, case)['eRMSE']
+            f'{expt}_eRMSE': Calc_eRMSE.rule_outputs(expt, case, regrid_method)['eRMSE']
             for expt in conf.EXPT_SIM
         }
         inputs.update({
@@ -450,13 +467,13 @@ class PlotSpreadSkill(TaskRule):
         return inputs
 
     @staticmethod
-    def rule_outputs(kwargs, case):
+    def rule_outputs(kwargs, case, regrid_method):
         kwstr = '-'.join(
             f'{k}={v}'
             for k, v in kwargs.items()
         )
         kwstr = kwstr.replace(' ', '')
-        return {'fig': conf.PATHS['figdir'] / 'N216sims' / case / f'spread_skill.{case}.{kwstr}.noncons.png'}
+        return {'fig': conf.PATHS['figdir'] / 'N216sims' / case / f'spread_skill.{case}.{kwstr}.{regrid_method}.png'}
 
     var_matrix = {
         'kwargs': [
@@ -464,12 +481,16 @@ class PlotSpreadSkill(TaskRule):
             dict(smooth=24),
             dict(xlim=(0, 20)),
             dict(xlim=(0, 48)),
+            dict(smooth=False, show_skill_minus_spread=True, ens='full'),
+            dict(smooth=False, show_skill_minus_spread=True, ens='red'),
         ],
         'case': conf.CASES,
+        'regrid_method': ['cons', 'non_cons'],
     }
 
 
     def rule_run(self):
+        print(self.kwargs)
         expt_eRMSE = {expt: xr.load_dataarray(self.inputs[f'{expt}_eRMSE']) for expt in conf.EXPT_SIM}
         expt_dRMSE = {expt: xr.load_dataarray(self.inputs[f'{expt}_dRMSE']) for expt in conf.EXPT_SIM}
         plot_spread_skill_ts(expt_dRMSE, expt_eRMSE, **self.kwargs)
@@ -480,7 +501,7 @@ class CalcAutocorrImerg(TaskRule):
     # enabled = False
     @staticmethod
     def rule_inputs(case):
-        inputs = {'imerg': RegridImergToN216.rule_outputs(case)['output']}
+        inputs = {'imerg': RegridImergToN216.rule_outputs(case, 'cons')['output']}
         return inputs
 
     @staticmethod
@@ -492,7 +513,7 @@ class CalcAutocorrImerg(TaskRule):
         outputs = {
             'imerg_autocorr': (
                 conf.PATHS['outdir']
-                / f'imerg_processed/N216grid/{d0}-{dlast}/autocorr_3B-HHR.MS.MRG.3IMERG.{d0}-{dlast}.hourly.V07B.nc'
+                / f'imerg_processed/N216grid/{d0}-{dlast}/N216.cons.autocorr_3B-HHR.MS.MRG.3IMERG.{d0}-{dlast}.hourly.V07B.nc'
             )
         }
         return outputs
@@ -575,7 +596,7 @@ class PlotAutocorr(TaskRule):
 
     @staticmethod
     def rule_outputs(case):
-        return {'fig': conf.PATHS['figdir'] / 'N216sims' / case / f'precip_autocorr.{case}.noncons.png'}
+        return {'fig': conf.PATHS['figdir'] / 'N216sims' / case / f'precip_autocorr.{case}.cons.png'}
 
     var_matrix = {
         'case': conf.CASES,
@@ -637,3 +658,168 @@ class PlotAutocorr(TaskRule):
 
         plt.savefig(self.outputs['fig'])
 
+
+class PlotTCWV(TaskRule):
+    @staticmethod
+    def rule_inputs(case):
+        inputs = {}
+        for expt in conf.EXPT_SIM:
+            suite = conf.EXPT_SIM[expt]
+            inputs[f'tcwv_{expt}'] = (
+                conf.SIMDIR /
+                f'{suite}/share/cycle/{case}/engl/um/'
+                f'englaa_pa.merged.{case}.{suite}.m01s30i461.1h-mean.nc'
+            )
+        inputs['tcwv_era5'] = RegridERA5ToN216.rule_outputs(case, 'tcwv')['output']
+        return inputs
+
+    @staticmethod
+    def rule_outputs(case):
+        return {'fig': conf.PATHS['figdir'] / 'N216sims' / case / f'tcwv.{case}.cons.png'}
+
+    var_matrix = {'case': conf.CASES}
+
+    def rule_run(self):
+        e5ds = xr.open_dataset(self.inputs['tcwv_era5'])
+        tcwv_mean = {
+            'ERA5': e5ds.__xarray_dataarray_variable__.mean(dim=['time']),
+        }
+        for expt in conf.EXPT_SIM:
+            print(expt)
+            ds = xr.open_dataset(self.inputs[f'tcwv_{expt}'])
+            tcwv = ds.m01s30i461.rename('tcwv')
+            tcwv_mean[expt] = tcwv.mean(dim=['realization', 'time'])
+
+        fig, axes = plt.subplots(4, 4, figsize=(22, 10), subplot_kw={'projection': ccrs.PlateCarree()}, layout='constrained')
+
+        norm = mpl.colors.BoundaryNorm(np.arange(0, 90, 10), ncolors=256)
+        for ax, (expt, tcwv) in zip(axes[0, :], tcwv_mean.items()):
+            im = ax.pcolormesh(tcwv.longitude, tcwv.latitude, tcwv, norm=norm)
+            ax.coastlines()
+            ax.set_title(expt)
+        plt.colorbar(im, ax=axes[0], label='TCWV (mm)')
+
+        norm2 = mpl.colors.BoundaryNorm([-16, -8, -4, -2, -1, 1, 2, 4, 8, 16], ncolors=256)
+        for ax, (expt, tcwv) in zip(axes[1, 1:], list(tcwv_mean.items())[1:]):
+            im = ax.pcolormesh(tcwv.longitude, tcwv.latitude, tcwv - tcwv_mean['ERA5'], norm=norm2, cmap='bwr')
+            ax.coastlines()
+        plt.colorbar(im, ax=axes[1], label='$\Delta$ TCWV (mm)')
+
+        for ax, (expt, tcwv) in zip(axes[2, 2:], list(tcwv_mean.items())[2:]):
+            im = ax.pcolormesh(tcwv.longitude, tcwv.latitude, tcwv - tcwv_mean['ctrl'], norm=norm2, cmap='bwr')
+            ax.coastlines()
+        plt.colorbar(im, ax=axes[2], label='$\Delta$ TCWV (mm)')
+
+        for ax, (expt, tcwv) in zip(axes[3, 3:], list(tcwv_mean.items())[3:]):
+            im = ax.pcolormesh(tcwv.longitude, tcwv.latitude, tcwv - tcwv_mean['vanillaMCSP'], norm=norm2, cmap='bwr')
+            ax.coastlines()
+        plt.colorbar(im, ax=axes[3], label='$\Delta$ TCWV (mm)')
+
+        for ax in axes[np.tril_indices(4, -1)].flatten():
+            ax.axis('off')
+
+        plt.savefig(self.outputs['fig'])
+
+
+class PlotMCSPCallingFreq(TaskRule):
+    @staticmethod
+    def rule_inputs(case):
+        inputs = {}
+        for expt in ['vanillaMCSP', 'stochMCSP']:
+            suite = conf.EXPT_SIM[expt]
+            inputs[f'cf_{expt}'] = (
+                conf.SIMDIR /
+                f'{suite}/share/cycle/{case}/engl/um/'
+                f'englaa_pa.merged.{case}.{suite}.m01s05i993.1h-mean.nc'
+            )
+            inputs[f'pflux_{expt}'] = (
+                conf.SIMDIR /
+                f'{suite}/share/cycle/{case}/engl/um/'
+                f'englaa_pa.merged.{case}.{suite}.m01s05i216.1h-mean.nc'
+            )
+        return inputs
+
+    @staticmethod
+    def rule_outputs(case):
+        return {'fig': conf.PATHS['figdir'] / 'N216sims' / case / f'MCSP_calling_freq.{case}.png'}
+
+    var_matrix = {'case': conf.CASES}
+
+    def rule_run(self):
+        expt_precip = {}
+        expt_cf = {}
+        for expt in ['vanillaMCSP', 'stochMCSP']:
+            print(expt)
+            expt_precip[expt] = xr.load_dataset(self.inputs[f'pflux_{expt}']).precipitation_flux
+            expt_precip[expt].values *= 3600
+            expt_precip[expt].attrs['units'] = 'mm h-1'
+            expt_cf[expt] = xr.load_dataset(self.inputs[f'cf_{expt}']).m01s05i993
+
+        cfmean_vanillaMCSP = expt_cf['vanillaMCSP'].isel(realization=slice(1, 10)).mean(['realization', 'time'])
+        cfmean_stochMCSP = expt_cf['stochMCSP'].isel(realization=slice(1, 10)).mean(['realization', 'time'])
+        cfmeans = {
+            'vanillaMCSP': cfmean_vanillaMCSP,
+            'stochMCSP': cfmean_stochMCSP,
+        }
+
+        precipmean_vanillaMCSP = expt_precip['vanillaMCSP'].isel(realization=slice(1, 10)).mean(['realization', 'time'])
+        precipmean_stochMCSP = expt_precip['stochMCSP'].isel(realization=slice(1, 10)).mean(['realization', 'time'])
+        precipmeans = {
+            'vanillaMCSP': precipmean_vanillaMCSP,
+            'stochMCSP': precipmean_stochMCSP,
+        }
+
+        fig, axes = plt.subplots(2, 3, figsize=(25.5, 8), subplot_kw={'projection': ccrs.PlateCarree()}, layout='constrained')
+
+        for ax, expt in zip(axes[:, 0], expt_precip):
+
+            precipmean = precipmeans[expt]
+            ax.set_title(f'precip. {expt}')
+            ax.coastlines()
+            #bounds = np.arange(0, np.round(cfmax + 0.1, 1), 0.05)
+            bounds = [0, 0.125, 0.25, 0.5, 1, 2, 3, 4]
+            cmap = mpl.cm.viridis
+            norm = mpl.colors.BoundaryNorm(bounds, cmap.N, extend='neither')
+            im = ax.pcolormesh(precipmean.longitude, precipmean.latitude, precipmean, norm=norm, cmap=cmap)
+            plt.colorbar(im, ax=ax, label='precip. (mm h$^{-1}$)')
+
+
+        for ax, expt in zip(axes[:, 1], expt_cf):
+
+            cfmean = cfmeans[expt]
+            precipmean = precipmeans[expt]
+            pcc = scipy.stats.pearsonr(cfmean.values.flatten(), precipmean.values.flatten())[0]
+            ax.set_title(f'MCSP calling freq. {expt} (PCC with precip.: {pcc:.3f})')
+            ax.coastlines()
+            #bounds = np.arange(0, np.round(cfmax + 0.1, 1), 0.05)
+            bounds = [0, 0.025, 0.05, 0.1, 0.2, 0.4, 0.6, 0.8]
+            cmap = mpl.cm.viridis
+            norm = mpl.colors.BoundaryNorm(bounds, cmap.N, extend='neither')
+            im = ax.pcolormesh(cfmean.longitude, cfmean.latitude, cfmean, norm=norm, cmap=cmap)
+            plt.colorbar(im, ax=ax, label='calling freq. (frac)')
+
+        for ax, method in zip(axes[:, 2], ['diff', 'frac']):
+            ax.coastlines()
+            if method == 'diff':
+                cfdata = cfmean_vanillaMCSP - cfmean_stochMCSP
+                ax.set_title(f'MCSP calling freq. vanillaMCSP - stochMCSP (mean={np.nanmean(cfdata):.3f})')
+                absmax = np.round(np.abs(cfdata.values).max(), 1)
+                bounds = np.arange(-absmax, absmax, 0.1)
+                cmap = mpl.cm.bwr
+                norm = mpl.colors.BoundaryNorm(bounds, cmap.N, extend='neither')
+                im = ax.pcolormesh(cfdata.longitude, cfdata.latitude, cfdata, norm=norm, cmap=cmap)
+                plt.colorbar(im, ax=ax, label='calling freq. (frac)')
+            elif method == 'frac':
+                cfdata = np.ma.masked_invalid(cfmean_vanillaMCSP / cfmean_stochMCSP)
+                cfdata_mean = cfdata.mean()
+                ax.set_title(f'MCSP calling freq. vanillaMCSP / stochMCSP (mean={cfdata_mean:.3f})')
+                # cf99 = np.nanpercentile(cfdata.values, 99)
+                # print(np.max(cfdata))
+                bounds = [0, 0.1, 0.2, 0.5, 0.9, 1.1, 2, 5, 10, 20]
+                cmap = mpl.cm.bwr
+                norm = mpl.colors.BoundaryNorm(bounds, cmap.N, extend='neither')
+                ax.set_facecolor('grey')
+                im = ax.pcolormesh(cfmean_vanillaMCSP.longitude, cfmean_vanillaMCSP.latitude, cfdata, norm=norm, cmap=cmap)
+                plt.colorbar(im, ax=ax, label='calling freq. (frac)', extend='max', ticks=[0, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20])
+
+        plt.savefig(self.outputs['fig'])
