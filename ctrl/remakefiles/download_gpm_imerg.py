@@ -14,9 +14,9 @@ import requests
 
 from remake2 import Remake, TaskRule
 
-import mcs_prime.mcs_prime_config_util as cu
+import config as conf
 
-DATADIR = cu.PATHS['datadir']
+DATADIR = conf.PATHS['datadir']
 IMERG_FINAL_30MIN_DIR = DATADIR / 'GPM_IMERG_final/30min'
 
 # Asia.
@@ -32,14 +32,16 @@ FINAL_30MIN_FILENAME_TPL = '3B-HHR.MS.MRG.3IMERG.{datestr}-S{start_time}-E{end_t
 YEARS = range(2020, 2021)
 MONTHS = [6]
 
-start_date = '2020-07-01'
-end_date = '2020-07-11'
+dates = []
+for case in conf.CASES:
+    um_start_time, um_end_time = conf.UM_TIMES[case][0]
+    start_date = um_start_time.split(' ')[0]
+    end_date = um_end_time.split(' ')[0]
+    date_range = pd.date_range(start=start_date, end=end_date)
+    dates.extend(list(date_range))
 
-# Create the date range
-date_range = pd.date_range(start=start_date, end=end_date)
-dates = list(date_range)
-
-downloader = Remake()
+slurm_config = {'account': 'short4hr', 'queue': 'short-serial-4hr', 'mem': 64000}
+downloader = Remake(config=dict(slurm=slurm_config))
 
 
 class GpmDatetime:
@@ -119,7 +121,7 @@ def gen_dates_urls_filenames(filename_tpl, url_tpl, start_date, end_date):
 
 class GpmImerg30MinDownload(TaskRule):
     rule_inputs = {}
-    rule_outputs = {'output_filenames': IMERG_FINAL_30MIN_DIR / '{date.year}' / 'download.{date}.done'}
+    rule_outputs = {'output_filenames': str(IMERG_FINAL_30MIN_DIR / '{date.year}' / 'download.{date}.done')}
     var_matrix = {'date': dates}
 
     def rule_run(self):

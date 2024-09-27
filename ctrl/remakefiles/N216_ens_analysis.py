@@ -12,23 +12,8 @@ import xesmf as xe
 from remake.util import sysrun
 from remake2 import Remake, TaskRule
 
-import mcs_prime.mcs_prime_config_util as cu
-
-DATADIR = cu.PATHS['datadir']
-SIMDIR = DATADIR / 'UM_sims'
-N_ENS_MEM = 10
-
-EXPT_SIM = {
-    'ctrl': 'u-di727',
-    'vanillaMCSP': 'u-di728',
-    'stochMCSP': 'u-dg135',
-}
-
-
-IMERG_FINAL_30MIN_DIR = DATADIR / 'GPM_IMERG_final/30min'
-# These times exactly match the UM sims.
-# UM_TIMES = pd.date_range('2020-07-01 04:00', '2020-07-11 03:00', freq='H')
-UM_TIMES = (('2020-07-01 04:00', '2020-07-11 03:00'), {'freq': 'H'}) # args, kwargs for date_range.
+import config as conf
+import utils
 
 slurm_config = {'account': 'short4hr', 'queue': 'short-serial-4hr', 'mem': 64000}
 rmk = Remake(config=dict(slurm=slurm_config, content_checks=False))
@@ -36,7 +21,7 @@ rmk = Remake(config=dict(slurm=slurm_config, content_checks=False))
 expt_var = [
     (e, v)
     # for e, v in product(EXPT_SIM, ['precip', 'mcsp_calling_freq'])
-    for e, v in product(EXPT_SIM, ['mcsp_calling_freq'])
+    for e, v in product(conf.EXPT_SIM, ['mcsp_calling_freq'])
     if not (e == 'ctrl' and v == 'mcsp_calling_freq')
 ]
 # expt_var.append(('stochMCSP', 'tcwv'))
@@ -51,40 +36,42 @@ class RegridImergToN216(TaskRule):
     """Regrid IMERG to the same grid as N216 simulations.
     """
     @staticmethod
-    def rule_inputs(times_args):
+    def rule_inputs(case):
         # Just load IMERG on the hour "S??0000".
+        times_args = conf.UM_TIMES[case]
         args, kwargs = times_args
         times = pd.date_range(*args, **kwargs)
         def h_to_m(h):
             return h * 60
         inputs = {
             f'imerg_{t}': (
-                IMERG_FINAL_30MIN_DIR /
+                conf.IMERG_FINAL_30MIN_DIR /
                 f'{t.year}/{t.month:02d}/{t.day:02d}/' /
                 f'3B-HHR.MS.MRG.3IMERG.{t.year}{t.month:02d}{t.day:02d}-S{t.hour:02d}0000-E{t.hour:02d}2959.{h_to_m(t.hour):04d}.V07B.HDF5.nc4'
             )
             for t in times
         }
-        inputs['n216ds'] = SIMDIR / 'u-dg135/share/cycle/20200701T0000Z/engl/um/englaa_pa.merged.20200701T0000Z.u-dg135.m01s05i216.nc'
+        inputs['n216ds'] = conf.SIMDIR / 'u-dg135/share/cycle/20200701T0000Z/engl/um/englaa_pa.merged.20200701T0000Z.u-dg135.m01s05i216.nc'
 
         return inputs
 
     @staticmethod
-    def rule_outputs(times_args):
+    def rule_outputs(case):
+        times_args = conf.UM_TIMES[case]
         args, kwargs = times_args
         times = pd.date_range(*args, **kwargs)
         d0 = str(times[0]).replace(' ', '_')
         dlast = str(times[-1]).replace(' ', '_')
         outputs = {
             'output': (
-                cu.PATHS['outdir']
+                conf.PATHS['outdir']
                 / f'imerg_processed/N216grid/{d0}-{dlast}/3B-HHR.MS.MRG.3IMERG.{d0}-{dlast}.hourly.V07B.nc'
             )
         }
         return outputs
 
     var_matrix = {
-        'times_args': [UM_TIMES],
+        'case': conf.CASES,
     }
 
     def rule_run(self):
@@ -100,45 +87,48 @@ class RegridImergToN216(TaskRule):
 
         # Used conservative method.
         # regridder = xe.Regridder(imerg, pflux, method='bilinear')
-        imerg_regridder = xe.Regridder(imerg, n216ds, method='conservative', periodic=True)
+        # imerg_regridder = xe.Regridder(imerg, n216ds, method='conservative', periodic=True)
+        imerg_regridder = xe.Regridder(imerg, n216ds, method='bilinear')
         n216imerg = imerg_regridder(imerg.precipitation)
-        cu.to_netcdf_tmp_then_copy(n216imerg, self.outputs['output'])
+        utils.to_netcdf_tmp_then_copy(n216imerg, self.outputs['output'])
 
 
 class RegridERA5ToN216(TaskRule):
     """Regrid ERA5 to the same grid as N216 simulations.
     """
     @staticmethod
-    def rule_inputs(times_args, var):
+    def rule_inputs(case, var):
         # Just load IMERG on the hour "S??0000".
+        times_args = conf.UM_TIMES[case]
         args, kwargs = times_args
         times = pd.date_range(*args, **kwargs)
         def h_to_m(h):
             return h * 60
         inputs = {
-            f'era5_{t}': cu.era5_sfc_fmtp(var, t.year, t.month, t.day, t.hour)
+            f'era5_{t}': conf.era5_sfc_fmtp(var, t.year, t.month, t.day, t.hour)
             for t in times
         }
-        inputs['n216ds'] = SIMDIR / 'u-dg135/share/cycle/20200701T0000Z/engl/um/englaa_pa.merged.20200701T0000Z.u-dg135.m01s05i216.nc'
+        inputs['n216ds'] = conf.SIMDIR / 'u-dg135/share/cycle/20200701T0000Z/engl/um/englaa_pa.merged.20200701T0000Z.u-dg135.m01s05i216.nc'
 
         return inputs
 
     @staticmethod
-    def rule_outputs(times_args, var):
+    def rule_outputs(case, var):
+        times_args = conf.UM_TIMES[case]
         args, kwargs = times_args
         times = pd.date_range(*args, **kwargs)
         d0 = str(times[0]).replace(' ', '_')
         dlast = str(times[-1]).replace(' ', '_')
         outputs = {
             'output': (
-                cu.PATHS['outdir']
+                conf.PATHS['outdir']
                 / f'era5_processed/N216grid/{d0}-{dlast}/ecmwf-era5_oper_an_sfc_{d0}-{dlast}.{var}.nc'
             )
         }
         return outputs
 
     var_matrix = {
-        'times_args': [UM_TIMES],
+        'case': conf.CASES,
         'var': ['tcwv'],
     }
 
@@ -155,31 +145,33 @@ class RegridERA5ToN216(TaskRule):
         # Used conservative method.
         e5regridder = xe.Regridder(era5ds_bounds, n216ds, method='conservative', periodic=True)
         n216era5da = e5regridder(era5ds[self.var])
-        cu.to_netcdf_tmp_then_copy(n216era5da, self.outputs['output'])
+        utils.to_netcdf_tmp_then_copy(n216era5da, self.outputs['output'])
 
 
 class PlotTotalPrecip(TaskRule):
     @staticmethod
-    def rule_inputs():
+    def rule_inputs(case):
         inputs = {}
-        for expt in EXPT_SIM:
-            suite = EXPT_SIM[expt]
+        for expt in conf.EXPT_SIM:
+            suite = conf.EXPT_SIM[expt]
             inputs[f'pflux_{expt}'] = (
-                SIMDIR /
-                f'{suite}/share/cycle/20200701T0000Z/engl/um/'
-                f'englaa_pa.merged.20200701T0000Z.{suite}.m01s05i216.nc'
+                conf.SIMDIR /
+                f'{suite}/share/cycle/{case}/engl/um/'
+                f'englaa_pa.merged.{case}.{suite}.m01s05i216.nc'
             )
-            # inputs[f'pflux_{expt}'] = SIMDIR / f'{suite}/processed/{expt}/engla_pa.precip.nc'
-        inputs['imerg'] = RegridImergToN216.rule_outputs(UM_TIMES)['output']
+            # inputs[f'pflux_{expt}'] = conf.SIMDIR / f'{suite}/processed/{expt}/engla_pa.precip.nc'
+        inputs['imerg'] = RegridImergToN216.rule_outputs(case)['output']
         return inputs
 
     @staticmethod
-    def rule_outputs():
-        return {'fig': cu.PATHS['figdir'] / 'N216sims' / 'total_precip.png'}
+    def rule_outputs(case):
+        return {'fig': conf.PATHS['figdir'] / 'N216sims' / case / f'total_precip.{case}.noncons.png'}
+
+    var_matrix = {'case': conf.CASES}
 
     def rule_run(self):
         expt_pflux = {}
-        for expt in EXPT_SIM:
+        for expt in conf.EXPT_SIM:
             print(expt)
             pflux = xr.load_dataset(self.inputs[f'pflux_{expt}']).precipitation_flux
             pflux.values *= 3600
@@ -191,7 +183,7 @@ class PlotTotalPrecip(TaskRule):
         fig, ax = plt.subplots()
         ax2 = ax.twinx()
         ax.plot(range(len(imerg.time)), imerg_ts, c='k', label='IMERG')
-        for expt in EXPT_SIM:
+        for expt in conf.EXPT_SIM:
             pflux_ts = expt_pflux[expt].mean(dim=['realization', 'latitude', 'longitude'])
             l, = ax.plot(range(len(pflux_ts.time)), pflux_ts, label=expt)
             ax2.plot(range(len(pflux_ts.time)), pflux_ts.values / imerg_ts.values * 100, c=l.get_color(), ls='--', label=expt)
@@ -221,23 +213,25 @@ sigmas = [0, 1, 2, 4]
 
 class GuassianFilterN216Imerg(TaskRule):
     @staticmethod
-    def rule_inputs():
-        inputs = {'imerg': RegridImergToN216.rule_outputs(UM_TIMES)['output']}
+    def rule_inputs(case):
+        inputs = {'imerg': RegridImergToN216.rule_outputs(case)['output']}
         return inputs
 
     @staticmethod
-    def rule_outputs():
-        args, kwargs = UM_TIMES
+    def rule_outputs(case):
+        args, kwargs = conf.UM_TIMES[case]
         times = pd.date_range(*args, **kwargs)
         d0 = str(times[0]).replace(' ', '_')
         dlast = str(times[-1]).replace(' ', '_')
         outputs = {
             'imerg_filtered': (
-                cu.PATHS['outdir']
+                conf.PATHS['outdir']
                 / f'imerg_processed/N216grid/{d0}-{dlast}/guassian_filtered_3B-HHR.MS.MRG.3IMERG.{d0}-{dlast}.hourly.V07B.nc'
             )
         }
         return outputs
+
+    var_matrix = {'case': conf.CASES}
 
     def rule_run(self):
         imerg = xr.load_dataarray(self.inputs['imerg'])
@@ -251,28 +245,29 @@ class GuassianFilterN216Imerg(TaskRule):
             da_imerg_filtered.values = imerg_filtered_values
             imerg_filtered.append(da_imerg_filtered)
         imerg_filtered = xr.concat(imerg_filtered, dim=pd.Index(sigmas, name='sigma'))
-        cu.to_netcdf_tmp_then_copy(imerg_filtered, self.outputs['imerg_filtered'])
+        utils.to_netcdf_tmp_then_copy(imerg_filtered, self.outputs['imerg_filtered'])
 
 
 class GuassianFilterExpt(TaskRule):
     @staticmethod
-    def rule_inputs(expt):
-        suite = EXPT_SIM[expt]
+    def rule_inputs(expt, case):
+        suite = conf.EXPT_SIM[expt]
         inputs = {'pflux': (
-            SIMDIR /
-            f'{suite}/share/cycle/20200701T0000Z/engl/um/'
-            f'englaa_pa.merged.20200701T0000Z.{suite}.m01s05i216.nc'
+            conf.SIMDIR /
+            f'{suite}/share/cycle/{case}/engl/um/'
+            f'englaa_pa.merged.{case}.{suite}.m01s05i216.nc'
         )}
         return inputs
 
     @staticmethod
-    def rule_outputs(expt):
-        suite = EXPT_SIM[expt]
-        outputs = {'pflux_filtered': SIMDIR / f'{suite}/processed/{expt}/engla_pa.filtered_precip.nc'}
+    def rule_outputs(expt, case):
+        suite = conf.EXPT_SIM[expt]
+        outputs = {'pflux_filtered': conf.SIMDIR / f'{suite}/processed/{expt}/{case}/engla_pa.filtered_precip.nc'}
         return outputs
 
     var_matrix = {
-        'expt': list(EXPT_SIM.keys())
+        'expt': list(conf.EXPT_SIM.keys()),
+        'case': conf.CASES,
     }
 
     def rule_run(self):
@@ -291,7 +286,7 @@ class GuassianFilterExpt(TaskRule):
                     da_pflux_filtered.values[i] = ndimage.gaussian_filter(da_pflux_filtered.values[i], (0, aspect * sigma, sigma))
             pflux_filtered.append(da_pflux_filtered)
         pflux_filtered = xr.concat(pflux_filtered, dim=pd.Index(sigmas, name='sigma'))
-        cu.to_netcdf_tmp_then_copy(pflux_filtered, self.outputs['pflux_filtered'])
+        utils.to_netcdf_tmp_then_copy(pflux_filtered, self.outputs['pflux_filtered'])
 
 
 def rmse(a1, a2):
@@ -300,22 +295,23 @@ def rmse(a1, a2):
 
 class Calc_eRMSE(TaskRule):
     @staticmethod
-    def rule_inputs(expt):
+    def rule_inputs(expt, case):
         inputs = {
-            'pflux_filtered': GuassianFilterExpt.rule_outputs(expt)['pflux_filtered'],
-            'imerg_filtered': GuassianFilterN216Imerg.rule_outputs()['imerg_filtered']
+            'pflux_filtered': GuassianFilterExpt.rule_outputs(expt, case)['pflux_filtered'],
+            'imerg_filtered': GuassianFilterN216Imerg.rule_outputs(case)['imerg_filtered']
         }
         return inputs
 
 
     @staticmethod
-    def rule_outputs(expt):
-        suite = EXPT_SIM[expt]
-        outputs = {'eRMSE': SIMDIR / f'{suite}/processed/{expt}/engla_pa.filtered_precip.eRMSE.nc'}
+    def rule_outputs(expt, case):
+        suite = conf.EXPT_SIM[expt]
+        outputs = {'eRMSE': conf.SIMDIR / f'{suite}/processed/{expt}/{case}/engla_pa.filtered_precip.eRMSE.nc'}
         return outputs
 
     var_matrix = {
-        'expt': list(EXPT_SIM.keys())
+        'expt': list(conf.EXPT_SIM.keys()),
+        'case': conf.CASES,
     }
 
     def rule_run(self):
@@ -338,26 +334,27 @@ class Calc_eRMSE(TaskRule):
                 'time': pflux_filtered['time'],
             }
         )
-        cu.to_netcdf_tmp_then_copy(eRMSE, self.outputs['eRMSE'])
+        utils.to_netcdf_tmp_then_copy(eRMSE, self.outputs['eRMSE'])
 
 
 class Calc_dRMSE(TaskRule):
     @staticmethod
-    def rule_inputs(expt):
+    def rule_inputs(expt, case):
         inputs = {
-            'pflux_filtered': GuassianFilterExpt.rule_outputs(expt)['pflux_filtered'],
+            'pflux_filtered': GuassianFilterExpt.rule_outputs(expt, case)['pflux_filtered'],
         }
         return inputs
 
 
     @staticmethod
-    def rule_outputs(expt):
-        suite = EXPT_SIM[expt]
-        outputs = {'dRMSE': SIMDIR / f'{suite}/processed/{expt}/engla_pa.filtered_precip.dRMSE.nc'}
+    def rule_outputs(expt, case):
+        suite = conf.EXPT_SIM[expt]
+        outputs = {'dRMSE': conf.SIMDIR / f'{suite}/processed/{expt}/{case}/engla_pa.filtered_precip.dRMSE.nc'}
         return outputs
 
     var_matrix = {
-        'expt': list(EXPT_SIM.keys())
+        'expt': list(conf.EXPT_SIM.keys()),
+        'case': conf.CASES,
     }
 
     def rule_run(self):
@@ -383,7 +380,7 @@ class Calc_dRMSE(TaskRule):
                 'time': pflux_filtered['time'],
             }
         )
-        cu.to_netcdf_tmp_then_copy(dRMSE, self.outputs['dRMSE'])
+        utils.to_netcdf_tmp_then_copy(dRMSE, self.outputs['dRMSE'])
 
 
 plot_sigmas = [0, 2, 4]
@@ -399,7 +396,7 @@ def plot_spread_skill_ts(expt_dRMSE, expt_eRMSE, smooth=False, xlim='full', show
             ax.set_title(f'$\sigma=${sigma} ({smooth} h smoothing)')
         else:
             ax.set_title(f'$\sigma=${sigma}')
-        for i, expt in enumerate(EXPT_SIM):
+        for i, expt in enumerate(conf.EXPT_SIM):
             # dRMSE_ts = np.nanmean(expt_dRMSE[expt], axis=(0, 1))
             # eRMSE_ts = np.nanmean(expt_eRMSE[expt], axis=0)
             dRMSE_ts = expt_dRMSE[expt].mean(dim=['realization1', 'realization2']).sel(sigma=sigma).values
@@ -430,36 +427,36 @@ def plot_spread_skill_ts(expt_dRMSE, expt_eRMSE, smooth=False, xlim='full', show
             ax.set_ylim((0, None))
     if len(axes) % 2 == 1:
         midax = axes[len(axes) // 2]
-        midax.legend(ncol=len(EXPT_SIM))
+        midax.legend(ncol=len(conf.EXPT_SIM))
         midax.set_xlabel('time (day)')
         ylim = midax.get_ylim()
         midax.set_ylim((ylim[0], ylim[1] * 1.2))
     else:
-        axes[-1].legend(ncol=len(EXPT_SIM))
+        axes[-1].legend(ncol=len(conf.EXPT_SIM))
         for ax in axes.flatten():
             ax.set_xlabel('time (day)')
 
 class PlotSpreadSkill(TaskRule):
     @staticmethod
-    def rule_inputs(kwargs):
+    def rule_inputs(kwargs, case):
         inputs = {
-            f'{expt}_eRMSE': Calc_eRMSE.rule_outputs(expt)['eRMSE']
-            for expt in EXPT_SIM
+            f'{expt}_eRMSE': Calc_eRMSE.rule_outputs(expt, case)['eRMSE']
+            for expt in conf.EXPT_SIM
         }
         inputs.update({
-            f'{expt}_dRMSE': Calc_dRMSE.rule_outputs(expt)['dRMSE']
-            for expt in EXPT_SIM
+            f'{expt}_dRMSE': Calc_dRMSE.rule_outputs(expt, case)['dRMSE']
+            for expt in conf.EXPT_SIM
         })
         return inputs
 
     @staticmethod
-    def rule_outputs(kwargs):
+    def rule_outputs(kwargs, case):
         kwstr = '-'.join(
             f'{k}={v}'
             for k, v in kwargs.items()
         )
         kwstr = kwstr.replace(' ', '')
-        return {'fig': cu.PATHS['figdir'] / 'N216sims' / f'spread_skill.{kwstr}.png'}
+        return {'fig': conf.PATHS['figdir'] / 'N216sims' / case / f'spread_skill.{case}.{kwstr}.noncons.png'}
 
     var_matrix = {
         'kwargs': [
@@ -467,37 +464,40 @@ class PlotSpreadSkill(TaskRule):
             dict(smooth=24),
             dict(xlim=(0, 20)),
             dict(xlim=(0, 48)),
-        ]
+        ],
+        'case': conf.CASES,
     }
 
 
     def rule_run(self):
-        expt_eRMSE = {expt: xr.load_dataarray(self.inputs[f'{expt}_eRMSE']) for expt in EXPT_SIM}
-        expt_dRMSE = {expt: xr.load_dataarray(self.inputs[f'{expt}_dRMSE']) for expt in EXPT_SIM}
+        expt_eRMSE = {expt: xr.load_dataarray(self.inputs[f'{expt}_eRMSE']) for expt in conf.EXPT_SIM}
+        expt_dRMSE = {expt: xr.load_dataarray(self.inputs[f'{expt}_dRMSE']) for expt in conf.EXPT_SIM}
         plot_spread_skill_ts(expt_dRMSE, expt_eRMSE, **self.kwargs)
         plt.savefig(self.outputs['fig'])
 
 
 class CalcAutocorrImerg(TaskRule):
-    enabled = False
+    # enabled = False
     @staticmethod
-    def rule_inputs():
-        inputs = {'imerg': RegridImergToN216.rule_outputs(UM_TIMES)['output']}
+    def rule_inputs(case):
+        inputs = {'imerg': RegridImergToN216.rule_outputs(case)['output']}
         return inputs
 
     @staticmethod
-    def rule_outputs():
-        args, kwargs = UM_TIMES
+    def rule_outputs(case):
+        args, kwargs = conf.UM_TIMES[case]
         times = pd.date_range(*args, **kwargs)
         d0 = str(times[0]).replace(' ', '_')
         dlast = str(times[-1]).replace(' ', '_')
         outputs = {
             'imerg_autocorr': (
-                cu.PATHS['outdir']
+                conf.PATHS['outdir']
                 / f'imerg_processed/N216grid/{d0}-{dlast}/autocorr_3B-HHR.MS.MRG.3IMERG.{d0}-{dlast}.hourly.V07B.nc'
             )
         }
         return outputs
+
+    var_matrix = {'case': conf.CASES}
 
     def rule_run(self):
         imerg = xr.load_dataarray(self.inputs['imerg'])
@@ -515,25 +515,30 @@ class CalcAutocorrImerg(TaskRule):
             dsout.imerg_autocorr[j, k] = res[0]
             dsout.imerg_autocorr_pvalue[j, k] = res[1]
 
-        cu.to_netcdf_tmp_then_copy(dsout, self.outputs['imerg_autocorr'])
+        utils.to_netcdf_tmp_then_copy(dsout, self.outputs['imerg_autocorr'])
 
 
 class CalcAutocorrExpt(TaskRule):
-    enabled = False
+    # enabled = False
     @staticmethod
-    def rule_inputs(expt):
-        suite = EXPT_SIM[expt]
-        inputs = {'pflux': SIMDIR / f'{suite}/processed/{expt}/engla_pa.precip.nc'}
+    def rule_inputs(expt, case):
+        suite = conf.EXPT_SIM[expt]
+        inputs = {'pflux': (
+            conf.SIMDIR /
+            f'{suite}/share/cycle/{case}/engl/um/'
+            f'englaa_pa.merged.{case}.{suite}.m01s05i216.nc'
+        )}
         return inputs
 
     @staticmethod
-    def rule_outputs(expt):
-        suite = EXPT_SIM[expt]
-        outputs = {'pflux_autocorr': SIMDIR / f'{suite}/processed/{expt}/engla_pa.autocorr_precip.nc'}
+    def rule_outputs(expt, case):
+        suite = conf.EXPT_SIM[expt]
+        outputs = {'pflux_autocorr': conf.SIMDIR / f'{suite}/processed/{expt}/{case}/engla_pa.autocorr_precip.nc'}
         return outputs
 
     var_matrix = {
-        'expt': list(EXPT_SIM.keys())
+        'expt': list(conf.EXPT_SIM.keys()),
+        'case': conf.CASES,
     }
 
     def rule_run(self):
@@ -555,26 +560,30 @@ class CalcAutocorrExpt(TaskRule):
             dsout.pflux_autocorr[i, j, k] = res[0]
             dsout.pflux_autocorr_pvalue[i, j, k] = res[1]
 
-        cu.to_netcdf_tmp_then_copy(dsout, self.outputs['pflux_autocorr'])
+        utils.to_netcdf_tmp_then_copy(dsout, self.outputs['pflux_autocorr'])
 
 
 class PlotAutocorr(TaskRule):
-    enabled = False
+    # enabled = False
     @staticmethod
-    def rule_inputs():
+    def rule_inputs(case):
         inputs = {}
-        inputs['imerg'] = CalcAutocorrImerg.rule_outputs()['imerg_autocorr']
-        for expt in EXPT_SIM:
-            inputs[expt] = CalcAutocorrExpt.rule_outputs(expt)['pflux_autocorr']
+        inputs['imerg'] = CalcAutocorrImerg.rule_outputs(case)['imerg_autocorr']
+        for expt in conf.EXPT_SIM:
+            inputs[expt] = CalcAutocorrExpt.rule_outputs(expt, case)['pflux_autocorr']
         return inputs
 
     @staticmethod
-    def rule_outputs():
-        return {'fig': cu.PATHS['figdir'] / 'N216sims' / 'precip_autocorr.png'}
+    def rule_outputs(case):
+        return {'fig': conf.PATHS['figdir'] / 'N216sims' / case / f'precip_autocorr.{case}.noncons.png'}
+
+    var_matrix = {
+        'case': conf.CASES,
+    }
 
     def rule_run(self):
         imerg_ac = xr.load_dataset(self.inputs['imerg'])
-        expts_ac = {expt: xr.load_dataset(self.inputs[expt]) for expt in EXPT_SIM}
+        expts_ac = {expt: xr.load_dataset(self.inputs[expt]) for expt in conf.EXPT_SIM}
 
         fig, axes = plt.subplots(4, 4, subplot_kw={'projection': ccrs.PlateCarree()}, layout='constrained')
         fig.set_size_inches((24, 12))
