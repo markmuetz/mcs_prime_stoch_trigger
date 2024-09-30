@@ -9,30 +9,56 @@ import numpy as np
 
 CASES = [
     '20200101T0000Z',
+    '20200201T0000Z',
+    '20200301T0000Z',
     '20200401T0000Z',
+    '20200501T0000Z',
+    '20200601T0000Z',
     '20200701T0000Z',
+    '20200801T0000Z',
+    '20200901T0000Z',
     '20201001T0000Z',
+    '20201101T0000Z',
+    '20201201T0000Z',
 ]
 
 SUITES = [
     'u-dg135',
-    # 'u-di727',
-    # 'u-di728',
+    'u-di727',
+    'u-di728',
+    # 'u-dj618',
 ]
 
 def cube_cell_method_is_empty(cube):
     return cube.cell_methods == tuple()
+
+def cube_cell_method_is_not_empty(cube):
+    return cube.cell_methods != tuple()
 
 CONSTRAINTS = {
     'm01s05i216': (
         iris.AttributeConstraint(STASH='m01s05i216') &
         iris.Constraint(cube_func=cube_cell_method_is_empty)
     ),
+    'm01s05i216.1h-mean': (
+        iris.AttributeConstraint(STASH='m01s05i216') &
+        iris.Constraint(cube_func=cube_cell_method_is_not_empty)
+    ),
     'm01s05i993.1h-mean': iris.AttributeConstraint(STASH='m01s05i993'),
     'm01s30i461.1h-mean': iris.AttributeConstraint(STASH='m01s30i461'),
 }
 
 JOBS = list(product(CASES, SUITES, CONSTRAINTS))
+# Add one case for u-dj618
+JOBS.extend([
+    ('20200701T0000Z', 'u-dj618', con)
+    for con in CONSTRAINTS.keys()
+])
+# Filter out non-existent MCSP var for u-dj727 (ctrl).
+JOBS = [
+    (case, suite, constraint) for (case, suite, constraint) in JOBS
+    if not (suite == 'u-dj727' and constraint == 'm01s05i993.1h-mean')
+]
 
 def gen_outpath(case, suite, stash_code):
     return (Path(f'/projects/mcsprime/mamue/cylc-run/{suite}/share/cycle/{case}/engl/um') /
