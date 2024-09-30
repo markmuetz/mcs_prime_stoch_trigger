@@ -23,10 +23,8 @@ EXPT_SIM = {
 }
 
 CASES = [
-    '20200101T0000Z',
-    '20200401T0000Z',
-    '20200701T0000Z',
-    '20201001T0000Z',
+    '2020{m:02d}01T0000Z'
+    for m in range(1, 13)
 ]
 
 IMERG_FINAL_30MIN_DIR = DATADIR / 'GPM_IMERG_final/30min'
