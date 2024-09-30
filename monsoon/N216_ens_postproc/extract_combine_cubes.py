@@ -57,7 +57,7 @@ JOBS.extend([
 # Filter out non-existent MCSP var for u-dj727 (ctrl).
 JOBS = [
     (case, suite, constraint) for (case, suite, constraint) in JOBS
-    if not (suite == 'u-dj727' and constraint == 'm01s05i993.1h-mean')
+    if not (suite == 'u-di727' and constraint == 'm01s05i993.1h-mean')
 ]
 
 def gen_outpath(case, suite, stash_code):
