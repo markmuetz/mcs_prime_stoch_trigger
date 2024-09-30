@@ -32,13 +32,13 @@ FINAL_30MIN_FILENAME_TPL = '3B-HHR.MS.MRG.3IMERG.{datestr}-S{start_time}-E{end_t
 YEARS = range(2020, 2021)
 MONTHS = [6]
 
-dates = []
+DATES_KWARGS = []
 for case in conf.CASES:
     um_start_time, um_end_time = conf.UM_TIMES[case][0]
-    start_date = um_start_time.split(' ')[0]
-    end_date = um_end_time.split(' ')[0]
-    date_range = pd.date_range(start=start_date, end=end_date)
-    dates.extend(list(date_range))
+    start_date = pd.Timestamp(um_start_time.split(' ')[0])
+    end_date = pd.Timestamp(um_end_time.split(' ')[0]) + pd.Timedelta(days=1)
+    date_range_kwargs = dict(start=start_date, end=end_date, freq='30min')
+    DATES_KWARGS.append(date_range_kwargs)
 
 slurm_config = {'account': 'short4hr', 'queue': 'short-serial-4hr', 'mem': 64000}
 downloader = Remake(config=dict(slurm=slurm_config))
@@ -72,7 +72,7 @@ class GpmDatetime:
         return f'{minutes:04d}'
 
 
-def get_from_gpm(url, filename, num_retries=6):
+def get_from_gpm(url, filename, num_retries=20):
     """Retrive from NASA GPM IMERG data repository
 
     note: $HOME/.netrc must be set!
@@ -81,7 +81,12 @@ def get_from_gpm(url, filename, num_retries=6):
     retries = num_retries
     while True:
         try:
+            print(f'  get {url}')
             result = requests.get(url)
+            result.raise_for_status()
+            print(f'  write contents to {filename}')
+            with open(filename,'wb') as f:
+                f.write(result.content)
             break
         except Exception as e:
             print('Connection error')
@@ -91,18 +96,9 @@ def get_from_gpm(url, filename, num_retries=6):
             retries -= 1
             sleep((num_retries - retries) * 10 + randint(0, 20))
 
-    try:
-        result.raise_for_status()
-        with open(filename,'wb') as f:
-            f.write(result.content)
-    except:
-        print('requests.get() returned an error code ' + str(result.status_code))
-        raise
 
-
-def gen_dates_urls_filenames(filename_tpl, url_tpl, start_date, end_date):
+def gen_dates_urls_filenames(filename_tpl, url_tpl, dates):
     """Generates dates, urls and filenames in 30min intervals"""
-    dates = pd.date_range(start_date, end_date, freq='30min')
     for date in dates:
         curr_date = date.to_pydatetime()
         next_date = curr_date + dt.timedelta(minutes=30)
@@ -121,21 +117,25 @@ def gen_dates_urls_filenames(filename_tpl, url_tpl, start_date, end_date):
 
 class GpmImerg30MinDownload(TaskRule):
     rule_inputs = {}
-    rule_outputs = {'output_filenames': str(IMERG_FINAL_30MIN_DIR / '{date.year}' / 'download.{date}.done')}
-    var_matrix = {'date': dates}
+    @staticmethod
+    def rule_outputs (date_range_kwargs):
+        dates = pd.date_range(**date_range_kwargs)
+        s = dates[0]
+        e = dates[-1]
+        return {'output_filenames': str(IMERG_FINAL_30MIN_DIR / f'{s.year}' / f'download.{s}-{e}.done')}
+
+    var_matrix = {'date_range_kwargs': DATES_KWARGS}
 
     def rule_run(self):
-
-        start_date = self.date
-        end_date = self.date + pd.Timedelta(days=1) - pd.Timedelta(minutes=30)
+        print(self.date_range_kwargs)
+        dates = pd.date_range(**self.date_range_kwargs)
 
         outputs = {}
         filename_tpl = FINAL_30MIN_FILENAME_TPL
         url_tpl = FINAL_30MIN_URL_TPL
         dates_urls_filenames = list(gen_dates_urls_filenames(filename_tpl,
                                                              url_tpl,
-                                                             start_date,
-                                                             end_date))
+                                                             dates))
         all_filenames = []
         for i, (date, url, filename) in enumerate(dates_urls_filenames):
             output_filename = self.outputs['output_filenames'].parent / f'{date.month:02d}/{date.day:02d}' / filename
@@ -155,7 +155,7 @@ class GpmImerg30MinDownload(TaskRule):
             tmp_filename.rename(output_filename)
             print(f'-> downloaded in {(timer() - start):.2f}s')
         else:
-            print(f'No files to download for {self.date}')
+            print(f'No files to download for {self.date_range_kwargs}')
 
         self.outputs['output_filenames'].write_text('\n'.join(all_filenames) + '\n')
 

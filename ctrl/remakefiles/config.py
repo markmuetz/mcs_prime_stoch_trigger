@@ -23,7 +23,7 @@ EXPT_SIM = {
 }
 
 CASES = [
-    '2020{m:02d}01T0000Z'
+    f'2020{m:02d}01T0000Z'
     for m in range(1, 13)
 ]
 
