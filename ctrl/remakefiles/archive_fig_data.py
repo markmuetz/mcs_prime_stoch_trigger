@@ -9,12 +9,13 @@ archive = ArchiveV1(
     archive_loc='/gws/nopw/j04/mcs_prime/mmuetz/tmp',
 )
 
+# Commented out tasks use the raw data, so archiving their inputs is huge (293 GB).
 rules = [
-    'PlotTotalPrecip',
+    # 'PlotTotalPrecip',
     'PlotSpreadSkill',
-    'PlotAutocorr',
-    'PlotTCWV',
-    'PlotMCSPCallingFreq',
+    # 'PlotAutocorr',
+    # 'PlotTCWV',
+    # 'PlotMCSPCallingFreq',
 ]
 for rule_name in rules:
     archive.add(
