@@ -1,7 +1,7 @@
 from remake import ArchiveV1, ArchiveV1Rule
 
 archive = ArchiveV1(
-    name='mcs_prime_stoch_trigger_fig_data',
+    name='mcs_prime_stoch_trigger_init_data',
     git_repo_url='http://github.com/markmuetz/mcs_prime_stoch_trigger',
     remakefile='N216_ens_analysis.py',
     author='Mark Muetzelfeldt',
