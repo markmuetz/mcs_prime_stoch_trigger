@@ -464,7 +464,7 @@ def plot_spread_skill_ts(expt_dRMSE, expt_eRMSE, smooth=False, xlim='full', show
 
 class PlotSpreadSkill(Rule):
     @staticmethod
-    def rule_inputs(kwargs, case, regrid_method):
+    def rule_inputs(plot_kwargs, case, regrid_method):
         inputs = {
             f'{expt}_eRMSE': Calc_eRMSE.rule_outputs(expt, case, regrid_method)['eRMSE']
             for expt in conf.EXPT_SIM
@@ -476,16 +476,16 @@ class PlotSpreadSkill(Rule):
         return inputs
 
     @staticmethod
-    def rule_outputs(kwargs, case, regrid_method):
+    def rule_outputs(plot_kwargs, case, regrid_method):
         kwstr = '-'.join(
             f'{k}={v}'
-            for k, v in kwargs.items()
+            for k, v in plot_kwargs.items()
         )
         kwstr = kwstr.replace(' ', '')
         return {'fig': conf.PATHS['figdir'] / 'N216sims' / case / f'spread_skill.{case}.{kwstr}.{regrid_method}.png'}
 
     rule_matrix = {
-        'kwargs': [
+        'plot_kwargs': [
             dict(smooth=False, show_skill_minus_spread=True),
             dict(smooth=24),
             dict(xlim=(0, 20)),
@@ -499,11 +499,11 @@ class PlotSpreadSkill(Rule):
 
 
     @staticmethod
-    def rule_run(inputs, outputs, kwargs, case, regrid_method):
-        print(kwargs)
+    def rule_run(inputs, outputs, plot_kwargs, case, regrid_method):
+        print(plot_kwargs)
         expt_eRMSE = {expt: xr.load_dataarray(inputs[f'{expt}_eRMSE']) for expt in conf.EXPT_SIM}
         expt_dRMSE = {expt: xr.load_dataarray(inputs[f'{expt}_dRMSE']) for expt in conf.EXPT_SIM}
-        plot_spread_skill_ts(expt_dRMSE, expt_eRMSE, **kwargs)
+        plot_spread_skill_ts(expt_dRMSE, expt_eRMSE, **plot_kwargs)
         plt.savefig(outputs['fig'])
 
 
