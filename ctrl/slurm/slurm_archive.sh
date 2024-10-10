@@ -8,4 +8,4 @@
 
 # executable
 cd /home/users/mmuetz/projects/mcs_prime_stoch_trigger/ctrl/remakefiles
-remake archive archive.py
+remake -T archive archive.py
