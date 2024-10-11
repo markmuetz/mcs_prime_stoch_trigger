@@ -32,22 +32,23 @@ def to_netcdf_tmp_then_copy(ds, outpath, encoding=None):
     stack = next(traceback.walk_stack(None))
     frame = stack[0]
     calling_file = frame.f_globals['__file__']
-    calling_obj = frame.f_locals['self']
-    calling_obj_doc = calling_obj.__doc__
-    calling_class_name = calling_obj.__class__.__name__
+    # calling_obj = frame.f_locals['self']
+    # calling_obj_doc = calling_obj.__doc__
+    # calling_class_name = calling_obj.__class__.__name__
     output_path_actual = util.tmp_to_actual_path(outpath)
 
     nodename = socket.gethostname()
     remake_version = remake.__version__
 
     metadata_attrs = {
-        'created by': f'{calling_file}: {calling_class_name}',
+        'created by': f'{calling_file}',
+        # 'created by': f'{calling_file}: {calling_class_name}',
         'calling file source': Path(calling_file).read_text(),
         'project repository': 'https://github.com/markmuetz/MCS_PRIME',
         'remake version': remake_version,
         'remake repository': 'https://github.com/markmuetz/remake',
-        'task': f'{calling_obj}',
-        'task doc': f'{calling_obj_doc}',
+        # 'task': f'{calling_obj}',
+        # 'task doc': f'{calling_obj_doc}',
         'created on': str(pd.Timestamp.now()),
         'nodename': nodename,
         'output path': str(output_path_actual),

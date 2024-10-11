@@ -154,7 +154,7 @@ class RegridERA5ToN216(Rule):
         utils.to_netcdf_tmp_then_copy(n216era5da, outputs['output'])
 
 
-class PlotTotalPrecip(Rule):
+class CalcTotalPrecip(Rule):
     @staticmethod
     def rule_inputs(case, regrid_method, ens):
         inputs = {}
@@ -171,6 +171,38 @@ class PlotTotalPrecip(Rule):
 
     @staticmethod
     def rule_outputs(case, regrid_method, ens):
+        return {'total_precip_data': conf.PATHS['outdir'] / 'N216sims' / case / f'total_precip.{case}.{regrid_method}.ens_{ens}.nc'}
+
+    rule_matrix = {
+        'case': conf.CASES,
+        'regrid_method': ['cons', 'non_cons'],
+        'ens': ['full', 'red'],
+    }
+
+    @staticmethod
+    def rule_run(inputs, outputs, case, regrid_method, ens):
+        ds = xr.Dataset()
+        for expt in conf.EXPT_SIM:
+            print(expt)
+            pflux = xr.load_dataset(inputs[f'pflux_{expt}']).precipitation_flux
+            pflux.values *= 3600
+            pflux.attrs['units'] = 'mm h-1'
+            if ens == 'red':
+                pflux = pflux.isel(realization=slice(1, 10))
+                print(pflux)
+            ds[f'{expt}_ts'] = pflux.mean(dim=['realization', 'latitude', 'longitude'])
+
+        imerg = xr.load_dataarray(inputs['imerg'])
+        ds['imerg_ts'] = imerg.mean(dim=['latitude', 'longitude'])
+
+        utils.to_netcdf_tmp_then_copy(ds, outputs['total_precip_data'])
+
+
+class PlotTotalPrecip(Rule):
+    rule_inputs = CalcTotalPrecip.rule_outputs
+
+    @staticmethod
+    def rule_outputs(case, regrid_method, ens):
         return {'fig': conf.PATHS['figdir'] / 'N216sims' / case / f'total_precip.{case}.{regrid_method}.ens_{ens}.png'}
 
     rule_matrix = {
@@ -181,25 +213,14 @@ class PlotTotalPrecip(Rule):
 
     @staticmethod
     def rule_run(inputs, outputs, case, regrid_method, ens):
-        expt_pflux = {}
-        for expt in conf.EXPT_SIM:
-            print(expt)
-            pflux = xr.load_dataset(inputs[f'pflux_{expt}']).precipitation_flux
-            pflux.values *= 3600
-            pflux.attrs['units'] = 'mm h-1'
-            if ens == 'red':
-                pflux = pflux.isel(realization=slice(1, 10))
-                print(pflux)
-            expt_pflux[expt] = pflux
-
-        imerg = xr.load_dataarray(inputs['imerg'])
-        imerg_ts = imerg.mean(dim=['latitude', 'longitude'])
+        ds = xr.load_dataset(inputs['total_precip_data'])
+        imerg_ts = ds['imerg_ts']
 
         fig, ax = plt.subplots()
         ax2 = ax.twinx()
-        ax.plot(range(len(imerg.time)), imerg_ts, c='k', label='IMERG')
+        ax.plot(range(len(imerg_ts.time)), imerg_ts, c='k', label='IMERG')
         for expt in conf.EXPT_SIM:
-            pflux_ts = expt_pflux[expt].mean(dim=['realization', 'latitude', 'longitude'])
+            pflux_ts = ds[f'{expt}_ts']
             l, = ax.plot(range(len(pflux_ts.time)), pflux_ts, label=expt)
             ax2.plot(range(len(pflux_ts.time)), pflux_ts.values / imerg_ts.values * 100, c=l.get_color(), ls='--', label=expt)
         ax.set_xlabel('Days since start')
@@ -672,7 +693,7 @@ class PlotAutocorr(Rule):
         plt.savefig(outputs['fig'])
 
 
-class PlotTCWV(Rule):
+class CalcTCWV(Rule):
     @staticmethod
     def rule_inputs(case):
         inputs = {}
@@ -688,44 +709,67 @@ class PlotTCWV(Rule):
 
     @staticmethod
     def rule_outputs(case):
-        return {'fig': conf.PATHS['figdir'] / 'N216sims' / case / f'tcwv.{case}.cons.png'}
+        return {'tcwv_output': conf.PATHS['figdir'] / 'N216sims' / case / f'tcwv.{case}.cons.nc'}
 
     rule_matrix = {'case': conf.CASES}
 
     @staticmethod
     def rule_run(inputs, outputs, case):
         e5ds = xr.open_dataset(inputs['tcwv_era5'])
-        tcwv_mean = {
-            'ERA5': e5ds.__xarray_dataarray_variable__.mean(dim=['time']),
-        }
+        dsout = xr.Dataset()
+        dsout['ERA5_tcwv'] = e5ds.__xarray_dataarray_variable__.mean(dim=['time'])
         for expt in conf.EXPT_SIM:
             print(expt)
             ds = xr.open_dataset(inputs[f'tcwv_{expt}'])
             tcwv = ds.m01s30i461.rename('tcwv')
-            tcwv_mean[expt] = tcwv.mean(dim=['realization', 'time'])
+            dsout[f'{expt}_tcwv'] = tcwv.mean(dim=['realization', 'time'])
+        utils.to_netcdf_tmp_then_copy(dsout, outputs['tcwv_output'])
 
+
+class PlotTCWV(Rule):
+    rule_inputs = CalcTCWV.rule_outputs
+
+    @staticmethod
+    def rule_outputs(case):
+        return {'fig': conf.PATHS['figdir'] / 'N216sims' / case / f'tcwv.{case}.cons.png'}
+
+    rule_matrix = {'case': conf.CASES}
+
+    @staticmethod
+    def rule_run(inputs, outputs, case):
+        # e5ds = xr.open_dataset(inputs['tcwv_era5'])
+        # tcwv_mean = {
+        #     'ERA5': e5ds.__xarray_dataarray_variable__.mean(dim=['time']),
+        # }
+        # for expt in conf.EXPT_SIM:
+        #     print(expt)
+        #     ds = xr.open_dataset(inputs[f'tcwv_{expt}'])
+        #     tcwv = ds.m01s30i461.rename('tcwv')
+        #     tcwv_mean[expt] = tcwv.mean(dim=['realization', 'time'])
+
+        ds = xr.load_dataset(inputs['tcwv_output'])
         fig, axes = plt.subplots(4, 4, figsize=(22, 10), subplot_kw={'projection': ccrs.PlateCarree()}, layout='constrained')
 
         norm = mpl.colors.BoundaryNorm(np.arange(0, 90, 10), ncolors=256)
-        for ax, (expt, tcwv) in zip(axes[0, :], tcwv_mean.items()):
+        for ax, (expt, tcwv) in zip(axes[0, :], ds.items()):
             im = ax.pcolormesh(tcwv.longitude, tcwv.latitude, tcwv, norm=norm)
             ax.coastlines()
             ax.set_title(expt)
         plt.colorbar(im, ax=axes[0], label='TCWV (mm)')
 
         norm2 = mpl.colors.BoundaryNorm([-16, -8, -4, -2, -1, 1, 2, 4, 8, 16], ncolors=256)
-        for ax, (expt, tcwv) in zip(axes[1, 1:], list(tcwv_mean.items())[1:]):
-            im = ax.pcolormesh(tcwv.longitude, tcwv.latitude, tcwv - tcwv_mean['ERA5'], norm=norm2, cmap='bwr')
+        for ax, (expt, tcwv) in zip(axes[1, 1:], list(ds.items())[1:]):
+            im = ax.pcolormesh(tcwv.longitude, tcwv.latitude, tcwv - ds['ERA5_tcwv'], norm=norm2, cmap='bwr')
             ax.coastlines()
         plt.colorbar(im, ax=axes[1], label='$\Delta$ TCWV (mm)')
 
-        for ax, (expt, tcwv) in zip(axes[2, 2:], list(tcwv_mean.items())[2:]):
-            im = ax.pcolormesh(tcwv.longitude, tcwv.latitude, tcwv - tcwv_mean['ctrl'], norm=norm2, cmap='bwr')
+        for ax, (expt, tcwv) in zip(axes[2, 2:], list(ds.items())[2:]):
+            im = ax.pcolormesh(tcwv.longitude, tcwv.latitude, tcwv - ds['ctrl_tcwv'], norm=norm2, cmap='bwr')
             ax.coastlines()
         plt.colorbar(im, ax=axes[2], label='$\Delta$ TCWV (mm)')
 
-        for ax, (expt, tcwv) in zip(axes[3, 3:], list(tcwv_mean.items())[3:]):
-            im = ax.pcolormesh(tcwv.longitude, tcwv.latitude, tcwv - tcwv_mean['vanillaMCSP'], norm=norm2, cmap='bwr')
+        for ax, (expt, tcwv) in zip(axes[3, 3:], list(ds.items())[3:]):
+            im = ax.pcolormesh(tcwv.longitude, tcwv.latitude, tcwv - ds['vanillaMCSP_tcwv'], norm=norm2, cmap='bwr')
             ax.coastlines()
         plt.colorbar(im, ax=axes[3], label='$\Delta$ TCWV (mm)')
 
@@ -735,7 +779,9 @@ class PlotTCWV(Rule):
         plt.savefig(outputs['fig'])
 
 
-class PlotMCSPCallingFreq(Rule):
+class CalcMCSPCallingFreqData(Rule):
+    rule_matrix = {'case': conf.CASES}
+
     @staticmethod
     def rule_inputs(case):
         inputs = {}
@@ -755,12 +801,10 @@ class PlotMCSPCallingFreq(Rule):
 
     @staticmethod
     def rule_outputs(case):
-        return {'fig': conf.PATHS['figdir'] / 'N216sims' / case / f'MCSP_calling_freq.{case}.png'}
-
-    rule_matrix = {'case': conf.CASES}
+        return {'mcsp_calling_freq': conf.PATHS['outdir'] / 'N216sims' / case / f'MCSP_calling_freq.{case}.nc'}
 
     @staticmethod
-    def rule_run(self):
+    def rule_run(inputs, outputs, case):
         expt_precip = {}
         expt_cf = {}
         for expt in ['vanillaMCSP', 'stochMCSP']:
@@ -771,14 +815,45 @@ class PlotMCSPCallingFreq(Rule):
             expt_cf[expt] = xr.load_dataset(inputs[f'cf_{expt}']).m01s05i993
 
         cfmean_vanillaMCSP = expt_cf['vanillaMCSP'].isel(realization=slice(1, 10)).mean(['realization', 'time'])
+        # cfmean_vanillaMCSP.rename('cfmean_vanillaMCSP')
         cfmean_stochMCSP = expt_cf['stochMCSP'].isel(realization=slice(1, 10)).mean(['realization', 'time'])
+        # cfmean_stochMCSP.rename('cfmean_stochMCSP')
+        precipmean_vanillaMCSP = expt_precip['vanillaMCSP'].isel(realization=slice(1, 10)).mean(['realization', 'time'])
+        # precipmean_vanillaMCSP.rename('precipmean_vanillaMCSP')
+        precipmean_stochMCSP = expt_precip['stochMCSP'].isel(realization=slice(1, 10)).mean(['realization', 'time'])
+        # precipmean_stochMCSP.rename('precipmean_stochMCSP')
+
+        ds = xr.Dataset()
+        ds['cfmean_vanillaMCSP'] = cfmean_vanillaMCSP
+        ds['cfmean_stochMCSP'] = cfmean_stochMCSP
+        ds['precipmean_vanillaMCSP'] = precipmean_vanillaMCSP
+        ds['precipmean_stochMCSP'] = precipmean_stochMCSP
+
+        utils.to_netcdf_tmp_then_copy(ds, outputs['mcsp_calling_freq'])
+
+
+class PlotMCSPCallingFreq(Rule):
+    rule_matrix = {'case': conf.CASES}
+
+    rule_inputs = CalcMCSPCallingFreqData.rule_outputs
+
+    @staticmethod
+    def rule_outputs(case):
+        return {'fig': conf.PATHS['figdir'] / 'N216sims' / case / f'MCSP_calling_freq.{case}.png'}
+
+    @staticmethod
+    def rule_run(inputs, outputs, case):
+        ds = xr.load_dataset(inputs['mcsp_calling_freq'])
+
+        cfmean_vanillaMCSP = ds['cfmean_vanillaMCSP']
+        cfmean_stochMCSP = ds['cfmean_stochMCSP']
         cfmeans = {
             'vanillaMCSP': cfmean_vanillaMCSP,
             'stochMCSP': cfmean_stochMCSP,
         }
 
-        precipmean_vanillaMCSP = expt_precip['vanillaMCSP'].isel(realization=slice(1, 10)).mean(['realization', 'time'])
-        precipmean_stochMCSP = expt_precip['stochMCSP'].isel(realization=slice(1, 10)).mean(['realization', 'time'])
+        precipmean_vanillaMCSP = ds['precipmean_vanillaMCSP']
+        precipmean_stochMCSP = ds['precipmean_stochMCSP']
         precipmeans = {
             'vanillaMCSP': precipmean_vanillaMCSP,
             'stochMCSP': precipmean_stochMCSP,
@@ -786,8 +861,7 @@ class PlotMCSPCallingFreq(Rule):
 
         fig, axes = plt.subplots(2, 3, figsize=(25.5, 8), subplot_kw={'projection': ccrs.PlateCarree()}, layout='constrained')
 
-        for ax, expt in zip(axes[:, 0], expt_precip):
-
+        for ax, expt in zip(axes[:, 0], ['vanillaMCSP', 'stochMCSP']):
             precipmean = precipmeans[expt]
             ax.set_title(f'precip. {expt}')
             ax.coastlines()
@@ -799,8 +873,7 @@ class PlotMCSPCallingFreq(Rule):
             plt.colorbar(im, ax=ax, label='precip. (mm h$^{-1}$)')
 
 
-        for ax, expt in zip(axes[:, 1], expt_cf):
-
+        for ax, expt in zip(axes[:, 1], ['vanillaMCSP', 'stochMCSP']):
             cfmean = cfmeans[expt]
             precipmean = precipmeans[expt]
             pcc = scipy.stats.pearsonr(cfmean.values.flatten(), precipmean.values.flatten())[0]

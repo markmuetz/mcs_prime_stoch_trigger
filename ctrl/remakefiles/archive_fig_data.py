@@ -11,15 +11,16 @@ archive = ArchiveV1(
 
 # Commented out tasks use the raw data, so archiving their inputs is huge (293 GB).
 rules = [
-    # 'PlotTotalPrecip',
+    'PlotTotalPrecip',
     'PlotSpreadSkill',
-    # 'PlotAutocorr',
-    # 'PlotTCWV',
-    # 'PlotMCSPCallingFreq',
+    'PlotAutocorr',
+    'PlotTCWV',
+    'PlotMCSPCallingFreq',
 ]
 for rule_name in rules:
     archive.add(
         ArchiveV1Rule(
             rule_name,
             inputs='all',
+            # outputs='all',
     ))
