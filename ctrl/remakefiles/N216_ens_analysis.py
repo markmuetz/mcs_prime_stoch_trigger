@@ -1,24 +1,25 @@
 import pandas as pd
 from itertools import product
 
-if __remake_run__:
-    import cartopy.crs as ccrs
-    import matplotlib.pyplot as plt
-    import matplotlib as mpl
-    import scipy.ndimage as ndimage
-    import numpy as np
-    import scipy.stats
-    import xarray as xr
-    import xesmf as xe
+import cartopy.crs as ccrs
+import matplotlib.pyplot as plt
+import matplotlib as mpl
+import scipy.ndimage as ndimage
+import numpy as np
+import scipy.stats
+import xarray as xr
+import xesmf as xe
 
-    from remake.util import sysrun
-    import utils
+from remake.util import sysrun
+import utils
 
 from remake import Remake, Rule
 
 import proj_config as conf
 
-slurm_config = {'account': 'short4hr', 'queue': 'short-serial-4hr', 'mem': 64000}
+from N216_geopotential_processing import CalcERA5_500hPa_geopotential, PlotERA5_500hPa_geopotential
+
+slurm_config = {'account': 'short4hr', 'partition': 'short-serial-4hr', 'mem': 64000}
 rmk = Remake(config=dict(slurm=slurm_config, content_checks=False))
 
 expt_var = [
@@ -437,9 +438,9 @@ def plot_spread_skill_ts(expt_dRMSE, expt_eRMSE, smooth=False, xlim='full', show
 
     for ax, sigma in zip(axes, plot_sigmas):
         if smooth:
-            ax.set_title(f'$\sigma=${sigma} ({smooth} h smoothing)')
+            ax.set_title(rf'$\sigma=${sigma} ({smooth} h smoothing)')
         else:
-            ax.set_title(f'$\sigma=${sigma}')
+            ax.set_title(rf'$\sigma=${sigma}')
         for i, expt in enumerate(conf.EXPT_SIM):
             # dRMSE_ts = np.nanmean(expt_dRMSE[expt], axis=(0, 1))
             # eRMSE_ts = np.nanmean(expt_eRMSE[expt], axis=0)
@@ -761,17 +762,17 @@ class PlotTCWV(Rule):
         for ax, (expt, tcwv) in zip(axes[1, 1:], list(ds.items())[1:]):
             im = ax.pcolormesh(tcwv.longitude, tcwv.latitude, tcwv - ds['ERA5_tcwv'], norm=norm2, cmap='bwr')
             ax.coastlines()
-        plt.colorbar(im, ax=axes[1], label='$\Delta$ TCWV (mm)')
+        plt.colorbar(im, ax=axes[1], label=r'$\Delta$ TCWV (mm)')
 
         for ax, (expt, tcwv) in zip(axes[2, 2:], list(ds.items())[2:]):
             im = ax.pcolormesh(tcwv.longitude, tcwv.latitude, tcwv - ds['ctrl_tcwv'], norm=norm2, cmap='bwr')
             ax.coastlines()
-        plt.colorbar(im, ax=axes[2], label='$\Delta$ TCWV (mm)')
+        plt.colorbar(im, ax=axes[2], label=r'$\Delta$ TCWV (mm)')
 
         for ax, (expt, tcwv) in zip(axes[3, 3:], list(ds.items())[3:]):
             im = ax.pcolormesh(tcwv.longitude, tcwv.latitude, tcwv - ds['vanillaMCSP_tcwv'], norm=norm2, cmap='bwr')
             ax.coastlines()
-        plt.colorbar(im, ax=axes[3], label='$\Delta$ TCWV (mm)')
+        plt.colorbar(im, ax=axes[3], label=r'$\Delta$ TCWV (mm)')
 
         for ax in axes[np.tril_indices(4, -1)].flatten():
             ax.axis('off')
