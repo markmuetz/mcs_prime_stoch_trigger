@@ -1,3 +1,7 @@
+"""This code is all well and good BUT, it's not necessary.
+You can download 500 hPa geopotential directly from CDS, which I've done in download_era5.py
+"""
+raise Exception('Obsolete code')
 from pathlib import Path
 
 import cartopy.crs as ccrs
@@ -198,6 +202,7 @@ class PlotERA5_500hPa_geopotential(Rule):
     @staticmethod
     def rule_run(inputs, outputs, case):
         geopot = xr.open_dataarray(inputs['output']).isel(time=0).load()
+        # print(geopot)
 
         fig, ax = plt.subplots(subplot_kw={'projection': ccrs.PlateCarree()}, figsize=(30, 15), layout='constrained')
         levels = np.arange(460, 624, 4)
