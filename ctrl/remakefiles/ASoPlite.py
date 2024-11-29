@@ -14,7 +14,7 @@ import seaborn as sns
 import shapely
 import xarray as xr
 
-from remake2 import Remake, TaskRule
+from remake import Remake, Rule
 
 import mcs_prime.mcs_prime_config_util as cu
 
@@ -327,7 +327,13 @@ REGIONS = {
     'us': (245, 275, 32, 48),
 }
 
-class ASoPN216regional(TaskRule):
+class ASoPN216regional(Rule):
+    rule_matrix = {
+        'expt': ['imerg', 'ctrl', 'vanillaMCSP', 'stochMCSP'],
+        'region': list(REGIONS),
+        'coarsen_time': ['hourly', '3-hourly'],
+    }
+
     @staticmethod
     def rule_inputs(expt, region, coarsen_time):
         if expt == 'imerg':
@@ -343,12 +349,6 @@ class ASoPN216regional(TaskRule):
     @staticmethod
     def rule_outputs(expt, region, coarsen_time):
         return {'output': cu.PATHS['outdir'] / 'ASoP' / 'dev' / f'asop.{expt}.{region}.{coarsen_time}.nc'}
-
-    var_matrix = {
-        'expt': ['imerg', 'ctrl', 'vanillaMCSP', 'stochMCSP'],
-        'region': list(REGIONS),
-        'coarsen_time': ['hourly', '3-hourly'],
-    }
 
     def rule_run(self):
         reg_extent = REGIONS[self.region]
@@ -373,7 +373,7 @@ class ASoPN216regional(TaskRule):
         cu.to_netcdf_tmp_then_copy(asop.ds, self.outputs['output'])
 
 
-class PlotRegions(TaskRule):
+class PlotRegions(Rule):
     @staticmethod
     def rule_inputs():
         return {}
@@ -418,7 +418,12 @@ class PlotRegions(TaskRule):
         plt.savefig(self.outputs['asop_regs'])
 
 
-class PlotASoPN216regional(TaskRule):
+class PlotASoPN216regional(Rule):
+    rule_matrix = {
+        'region': list(REGIONS),
+        'coarsen_time': ['hourly', '3-hourly'],
+    }
+
     @staticmethod
     def rule_inputs(region, coarsen_time):
         inputs = {}
@@ -443,11 +448,6 @@ class PlotASoPN216regional(TaskRule):
             '7x7_spat_corr': fig_asop_dir / f'asop.7x7_spat_corr.{region}.{coarsen_time}.png',
             '7x7_spat_temp_corr': fig_asop_dir / f'asop.7x7_spat_temp_corr.{region}.{coarsen_time}.png',
         }
-
-    var_matrix = {
-        'region': list(REGIONS),
-        'coarsen_time': ['hourly', '3-hourly'],
-    }
 
     def rule_run(self):
         reg_extent = REGIONS[self.region]
