@@ -20,4 +20,5 @@ for rule_name in rules:
         ArchiveV1Rule(
             rule_name,
             inputs='all',
-    ))
+        )
+    )

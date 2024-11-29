@@ -35,26 +35,32 @@ expt_var = [
 # m01s05i993: calling freq (1-h mean)
 # m01s30i461: TCWV (1-h mean)
 
+
 class RegridImergToN216(Rule):
-    """Regrid IMERG to the same grid as N216 simulations.
-    """
+    """Regrid IMERG to the same grid as N216 simulations."""
+
     @staticmethod
     def rule_inputs(case, regrid_method):
         # Just load IMERG on the hour "S??0000".
         times_args = conf.UM_TIMES[case]
         args, kwargs = times_args
         times = pd.date_range(*args, **kwargs)
+
         def h_to_m(h):
             return h * 60
+
         inputs = {
             f'imerg_{t}': (
-                conf.IMERG_FINAL_30MIN_DIR /
-                f'{t.year}/{t.month:02d}/{t.day:02d}/' /
-                f'3B-HHR.MS.MRG.3IMERG.{t.year}{t.month:02d}{t.day:02d}-S{t.hour:02d}0000-E{t.hour:02d}2959.{h_to_m(t.hour):04d}.V07B.HDF5.nc4'
+                conf.IMERG_FINAL_30MIN_DIR
+                / f'{t.year}/{t.month:02d}/{t.day:02d}/'
+                / f'3B-HHR.MS.MRG.3IMERG.{t.year}{t.month:02d}{t.day:02d}-S{t.hour:02d}0000-E{t.hour:02d}2959.{h_to_m(t.hour):04d}.V07B.HDF5.nc4'
             )
             for t in times
         }
-        inputs['n216ds'] = conf.SIMDIR / 'u-dg135/share/cycle/20200701T0000Z/engl/um/englaa_pa.merged.20200701T0000Z.u-dg135.m01s05i216.nc'
+        inputs['n216ds'] = (
+            conf.SIMDIR
+            / 'u-dg135/share/cycle/20200701T0000Z/engl/um/englaa_pa.merged.20200701T0000Z.u-dg135.m01s05i216.nc'
+        )
 
         return inputs
 
@@ -99,31 +105,33 @@ class RegridImergToN216(Rule):
 
 
 class RegridERA5ToN216(Rule):
-    """Regrid ERA5 to the same grid as N216 simulations.
-    """
+    """Regrid ERA5 to the same grid as N216 simulations."""
+
     @staticmethod
     def rule_inputs(case, var):
         # Just load IMERG on the hour "S??0000".
         times_args = conf.UM_TIMES[case]
         args, kwargs = times_args
         times = pd.date_range(*args, **kwargs)
+
         def h_to_m(h):
             return h * 60
+
         if var == 'tcwv':
-            inputs = {
-                f'era5_{t}': conf.era5_sfc_fmtp(var, t.year, t.month, t.day, t.hour)
-                for t in times
-            }
+            inputs = {f'era5_{t}': conf.era5_sfc_fmtp(var, t.year, t.month, t.day, t.hour) for t in times}
         elif var == 'z':
             month = case[4:6]
             inputs = {
                 'era5_z': (
-                    conf.PATHS['datadir'] /
-                    f'ecmwf-era5/misc/2020/{month}' /
-                    f'ecmwf-era5_oper_an_pl.2024.{month}.1-11.geopotential_500hPa.nc'
+                    conf.PATHS['datadir']
+                    / f'ecmwf-era5/misc/2020/{month}'
+                    / f'ecmwf-era5_oper_an_pl.2024.{month}.1-11.geopotential_500hPa.nc'
                 ),
             }
-        inputs['n216ds'] = conf.SIMDIR / 'u-dg135/share/cycle/20200701T0000Z/engl/um/englaa_pa.merged.20200701T0000Z.u-dg135.m01s05i216.nc'
+        inputs['n216ds'] = (
+            conf.SIMDIR
+            / 'u-dg135/share/cycle/20200701T0000Z/engl/um/englaa_pa.merged.20200701T0000Z.u-dg135.m01s05i216.nc'
+        )
 
         return inputs
 
@@ -179,9 +187,7 @@ class CalcTotalPrecip(Rule):
         for expt in conf.EXPT_SIM:
             suite = conf.EXPT_SIM[expt]
             inputs[f'pflux_{expt}'] = (
-                conf.SIMDIR /
-                f'{suite}/share/cycle/{case}/engl/um/'
-                f'englaa_pa.merged.{case}.{suite}.m01s05i216.nc'
+                conf.SIMDIR / f'{suite}/share/cycle/{case}/engl/um/' f'englaa_pa.merged.{case}.{suite}.m01s05i216.nc'
             )
             # inputs[f'pflux_{expt}'] = conf.SIMDIR / f'{suite}/processed/{expt}/engla_pa.precip.nc'
         inputs['imerg'] = RegridImergToN216.rule_outputs(case, regrid_method)['output']
@@ -189,7 +195,12 @@ class CalcTotalPrecip(Rule):
 
     @staticmethod
     def rule_outputs(case, regrid_method, ens):
-        return {'total_precip_data': conf.PATHS['outdir'] / 'N216sims' / case / f'total_precip.{case}.{regrid_method}.ens_{ens}.nc'}
+        return {
+            'total_precip_data': conf.PATHS['outdir']
+            / 'N216sims'
+            / case
+            / f'total_precip.{case}.{regrid_method}.ens_{ens}.nc'
+        }
 
     rule_matrix = {
         'case': conf.CASES,
@@ -239,8 +250,10 @@ class PlotTotalPrecip(Rule):
         ax.plot(range(len(imerg_ts.time)), imerg_ts, c='k', label='IMERG')
         for expt in conf.EXPT_SIM:
             pflux_ts = ds[f'{expt}_ts']
-            l, = ax.plot(range(len(pflux_ts.time)), pflux_ts, label=expt)
-            ax2.plot(range(len(pflux_ts.time)), pflux_ts.values / imerg_ts.values * 100, c=l.get_color(), ls='--', label=expt)
+            (l,) = ax.plot(range(len(pflux_ts.time)), pflux_ts, label=expt)
+            ax2.plot(
+                range(len(pflux_ts.time)), pflux_ts.values / imerg_ts.values * 100, c=l.get_color(), ls='--', label=expt
+            )
         ax.set_xlabel('Days since start')
         ax.set_ylabel('non-area-weighted global mean precip (mm h$^{-1}$)')
         ax2.set_ylabel('% IMERG')
@@ -310,11 +323,11 @@ class GuassianFilterExpt(Rule):
     @staticmethod
     def rule_inputs(expt, case):
         suite = conf.EXPT_SIM[expt]
-        inputs = {'pflux': (
-            conf.SIMDIR /
-            f'{suite}/share/cycle/{case}/engl/um/'
-            f'englaa_pa.merged.{case}.{suite}.m01s05i216.nc'
-        )}
+        inputs = {
+            'pflux': (
+                conf.SIMDIR / f'{suite}/share/cycle/{case}/engl/um/' f'englaa_pa.merged.{case}.{suite}.m01s05i216.nc'
+            )
+        }
         return inputs
 
     @staticmethod
@@ -342,14 +355,16 @@ class GuassianFilterExpt(Rule):
             print(sigma)
             for i in range(nens):
                 if sigma != 0:
-                    da_pflux_filtered.values[i] = ndimage.gaussian_filter(da_pflux_filtered.values[i], (0, aspect * sigma, sigma))
+                    da_pflux_filtered.values[i] = ndimage.gaussian_filter(
+                        da_pflux_filtered.values[i], (0, aspect * sigma, sigma)
+                    )
             pflux_filtered.append(da_pflux_filtered)
         pflux_filtered = xr.concat(pflux_filtered, dim=pd.Index(sigmas, name='sigma'))
         utils.to_netcdf_tmp_then_copy(pflux_filtered, outputs['pflux_filtered'])
 
 
 def rmse(a1, a2):
-    return np.sqrt(np.mean((a1 - a2)**2))
+    return np.sqrt(np.mean((a1 - a2) ** 2))
 
 
 class Calc_eRMSE(Rule):
@@ -357,15 +372,16 @@ class Calc_eRMSE(Rule):
     def rule_inputs(expt, case, regrid_method):
         inputs = {
             'pflux_filtered': GuassianFilterExpt.rule_outputs(expt, case)['pflux_filtered'],
-            'imerg_filtered': GuassianFilterN216Imerg.rule_outputs(case, regrid_method)['imerg_filtered']
+            'imerg_filtered': GuassianFilterN216Imerg.rule_outputs(case, regrid_method)['imerg_filtered'],
         }
         return inputs
-
 
     @staticmethod
     def rule_outputs(expt, case, regrid_method):
         suite = conf.EXPT_SIM[expt]
-        outputs = {'eRMSE': conf.SIMDIR / f'{suite}/processed/{expt}/{case}/engla_pa.filtered_precip.eRMSE.{regrid_method}.nc'}
+        outputs = {
+            'eRMSE': conf.SIMDIR / f'{suite}/processed/{expt}/{case}/engla_pa.filtered_precip.eRMSE.{regrid_method}.nc'
+        }
         return outputs
 
     rule_matrix = {
@@ -385,7 +401,9 @@ class Calc_eRMSE(Rule):
             for sigma_idx in range(len(sigmas)):
                 print(expt, ens_idx, sigma_idx)
                 for time_idx in range(ntime):
-                    eRMSE_data[sigma_idx, ens_idx, time_idx] = rmse(imerg_filtered[sigma_idx, time_idx], pflux_filtered[sigma_idx, ens_idx, time_idx])
+                    eRMSE_data[sigma_idx, ens_idx, time_idx] = rmse(
+                        imerg_filtered[sigma_idx, time_idx], pflux_filtered[sigma_idx, ens_idx, time_idx]
+                    )
 
         eRMSE = xr.DataArray(
             eRMSE_data,
@@ -393,7 +411,7 @@ class Calc_eRMSE(Rule):
                 'sigma': pflux_filtered['sigma'],
                 'realization': pflux_filtered['realization'],
                 'time': pflux_filtered['time'],
-            }
+            },
         )
         utils.to_netcdf_tmp_then_copy(eRMSE, outputs['eRMSE'])
 
@@ -405,7 +423,6 @@ class Calc_dRMSE(Rule):
             'pflux_filtered': GuassianFilterExpt.rule_outputs(expt, case)['pflux_filtered'],
         }
         return inputs
-
 
     @staticmethod
     def rule_outputs(expt, case):
@@ -430,8 +447,7 @@ class Calc_dRMSE(Rule):
                 for sigma_idx in range(len(sigmas)):
                     for time_idx in range(ntime):
                         dRMSE_data[sigma_idx, ens_idx1, ens_idx2, time_idx] = rmse(
-                            pflux_filtered[sigma_idx, ens_idx1, time_idx],
-                            pflux_filtered[sigma_idx, ens_idx2, time_idx]
+                            pflux_filtered[sigma_idx, ens_idx1, time_idx], pflux_filtered[sigma_idx, ens_idx2, time_idx]
                         )
         dRMSE = xr.DataArray(
             dRMSE_data,
@@ -440,12 +456,14 @@ class Calc_dRMSE(Rule):
                 'realization1': pflux_filtered['realization'].values,
                 'realization2': pflux_filtered['realization'].values,
                 'time': pflux_filtered['time'],
-            }
+            },
         )
         utils.to_netcdf_tmp_then_copy(dRMSE, outputs['dRMSE'])
 
 
 plot_sigmas = [0, 2, 4]
+
+
 def plot_spread_error_ts(expt_dRMSE, expt_eRMSE, smooth=False, xlim='full', show_error_minus_spread=False, ens='full'):
     ntime = len(expt_eRMSE['ctrl'].time)
 
@@ -468,8 +486,8 @@ def plot_spread_error_ts(expt_dRMSE, expt_eRMSE, smooth=False, xlim='full', show
             dRMSE_ts = dRMSE.mean(dim=['realization1', 'realization2']).sel(sigma=sigma).values
             eRMSE_ts = expt_eRMSE[expt].mean(dim=['realization']).sel(sigma=sigma).values
             if smooth:
-                dRMSE_ts = np.convolve(dRMSE_ts, np.ones((smooth, )) / smooth, mode='same')
-                eRMSE_ts = np.convolve(eRMSE_ts, np.ones((smooth, )) / smooth, mode='same')
+                dRMSE_ts = np.convolve(dRMSE_ts, np.ones((smooth,)) / smooth, mode='same')
+                eRMSE_ts = np.convolve(eRMSE_ts, np.ones((smooth,)) / smooth, mode='same')
             c = cs[i]
             ax.plot(eRMSE_ts, color=c, label=f'{expt} error')
             ax.plot(dRMSE_ts, ls='--', color=c, label=f'{expt} spread')
@@ -502,25 +520,19 @@ def plot_spread_error_ts(expt_dRMSE, expt_eRMSE, smooth=False, xlim='full', show
         for ax in axes.flatten():
             ax.set_xlabel('time (day)')
 
+
 class PlotSpreadError(Rule):
     @staticmethod
     def rule_inputs(plot_kwargs, case, regrid_method):
         inputs = {
-            f'{expt}_eRMSE': Calc_eRMSE.rule_outputs(expt, case, regrid_method)['eRMSE']
-            for expt in conf.EXPT_SIM
+            f'{expt}_eRMSE': Calc_eRMSE.rule_outputs(expt, case, regrid_method)['eRMSE'] for expt in conf.EXPT_SIM
         }
-        inputs.update({
-            f'{expt}_dRMSE': Calc_dRMSE.rule_outputs(expt, case)['dRMSE']
-            for expt in conf.EXPT_SIM
-        })
+        inputs.update({f'{expt}_dRMSE': Calc_dRMSE.rule_outputs(expt, case)['dRMSE'] for expt in conf.EXPT_SIM})
         return inputs
 
     @staticmethod
     def rule_outputs(plot_kwargs, case, regrid_method):
-        kwstr = '-'.join(
-            f'{k}={v}'
-            for k, v in plot_kwargs.items()
-        )
+        kwstr = '-'.join(f'{k}={v}' for k, v in plot_kwargs.items())
         kwstr = kwstr.replace(' ', '')
         return {'fig': conf.PATHS['figdir'] / 'N216sims' / case / f'spread_error.{case}.{kwstr}.{regrid_method}.png'}
 
@@ -536,7 +548,6 @@ class PlotSpreadError(Rule):
         'case': conf.CASES,
         'regrid_method': ['cons', 'non_cons'],
     }
-
 
     @staticmethod
     def rule_run(inputs, outputs, plot_kwargs, case, regrid_method):
@@ -570,21 +581,25 @@ class PlotAllCasesSpreadError(Rule):
             for expt in conf.EXPT_SIM
             for case in conf.CASES
         }
-        inputs.update({
-            f'{case}_{expt}_dRMSE': Calc_dRMSE.rule_outputs(expt, case)['dRMSE']
-            for expt in conf.EXPT_SIM
-            for case in conf.CASES
-        })
+        inputs.update(
+            {
+                f'{case}_{expt}_dRMSE': Calc_dRMSE.rule_outputs(expt, case)['dRMSE']
+                for expt in conf.EXPT_SIM
+                for case in conf.CASES
+            }
+        )
         return inputs
 
     @staticmethod
     def rule_outputs(plot_kwargs, regrid_method):
-        kwstr = '-'.join(
-            f'{k}={v}'
-            for k, v in plot_kwargs.items()
-        )
+        kwstr = '-'.join(f'{k}={v}' for k, v in plot_kwargs.items())
         kwstr = kwstr.replace(' ', '')
-        return {'fig': conf.PATHS['figdir'] / 'N216sims' / 'all_cases' / f'spread_error.all_cases.{kwstr}.{regrid_method}.png'}
+        return {
+            'fig': conf.PATHS['figdir']
+            / 'N216sims'
+            / 'all_cases'
+            / f'spread_error.all_cases.{kwstr}.{regrid_method}.png'
+        }
 
     @staticmethod
     def rule_run(inputs, outputs, plot_kwargs, regrid_method):
@@ -596,7 +611,7 @@ class PlotAllCasesSpreadError(Rule):
             np.datetime64('2020-01-01T04:00:00'),
             np.datetime64('2020-01-11T04:00:00'),
             np.timedelta64(1, 'h'),
-            dtype='datetime64[ns]'
+            dtype='datetime64[ns]',
         )
 
         # See comment in PlotAllCasesGeopotSpreadError.
@@ -672,11 +687,11 @@ class CalcAutocorrExpt(Rule):
     @staticmethod
     def rule_inputs(expt, case):
         suite = conf.EXPT_SIM[expt]
-        inputs = {'pflux': (
-            conf.SIMDIR /
-            f'{suite}/share/cycle/{case}/engl/um/'
-            f'englaa_pa.merged.{case}.{suite}.m01s05i216.nc'
-        )}
+        inputs = {
+            'pflux': (
+                conf.SIMDIR / f'{suite}/share/cycle/{case}/engl/um/' f'englaa_pa.merged.{case}.{suite}.m01s05i216.nc'
+            )
+        }
         return inputs
 
     @staticmethod
@@ -743,29 +758,53 @@ class PlotAutocorr(Rule):
         axes[0, 0].coastlines()
 
         for ax, expt_ac in zip(axes[0, 1:], expts_ac.values()):
-            im = ax.pcolormesh(expt_ac.longitude, expt_ac.latitude, expt_ac.pflux_autocorr.mean(dim='realization'), vmin=0, vmax=1)
+            im = ax.pcolormesh(
+                expt_ac.longitude, expt_ac.latitude, expt_ac.pflux_autocorr.mean(dim='realization'), vmin=0, vmax=1
+            )
             # plt.colorbar(im, ax=ax)
             ax.coastlines()
 
         plt.colorbar(im, ax=axes[0, -1])
 
         for ax, expt_ac in zip(axes[1, 1:], expts_ac.values()):
-            im = ax.pcolormesh(expt_ac.longitude, expt_ac.latitude, expt_ac.pflux_autocorr.mean(dim='realization') - imerg_ac.imerg_autocorr, vmin=-.4, vmax=.4, cmap='bwr')
+            im = ax.pcolormesh(
+                expt_ac.longitude,
+                expt_ac.latitude,
+                expt_ac.pflux_autocorr.mean(dim='realization') - imerg_ac.imerg_autocorr,
+                vmin=-0.4,
+                vmax=0.4,
+                cmap='bwr',
+            )
             # plt.colorbar(im, ax=ax)
             ax.coastlines()
 
         plt.colorbar(im, ax=axes[1, -1])
 
         for ax, expt_ac in zip(axes[2, 2:], list(expts_ac.values())[1:]):
-            im = ax.pcolormesh(expt_ac.longitude, expt_ac.latitude, expt_ac.pflux_autocorr.mean(dim='realization') - expts_ac['ctrl'].pflux_autocorr.mean(dim='realization'), vmin=-.2, vmax=.2, cmap='bwr')
+            im = ax.pcolormesh(
+                expt_ac.longitude,
+                expt_ac.latitude,
+                expt_ac.pflux_autocorr.mean(dim='realization')
+                - expts_ac['ctrl'].pflux_autocorr.mean(dim='realization'),
+                vmin=-0.2,
+                vmax=0.2,
+                cmap='bwr',
+            )
             # plt.colorbar(im, ax=ax)
             ax.coastlines()
 
         plt.colorbar(im, ax=axes[2, -1])
 
-
         ax = axes[3, 3]
-        im = ax.pcolormesh(expt_ac.longitude, expt_ac.latitude, expts_ac['vanillaMCSP'].pflux_autocorr.mean(dim='realization') - expts_ac['stochMCSP'].pflux_autocorr.mean(dim='realization'), vmin=-.2, vmax=.2, cmap='bwr')
+        im = ax.pcolormesh(
+            expt_ac.longitude,
+            expt_ac.latitude,
+            expts_ac['vanillaMCSP'].pflux_autocorr.mean(dim='realization')
+            - expts_ac['stochMCSP'].pflux_autocorr.mean(dim='realization'),
+            vmin=-0.2,
+            vmax=0.2,
+            cmap='bwr',
+        )
         # plt.colorbar(im, ax=ax)
         ax.coastlines()
 
@@ -796,8 +835,7 @@ class CalcTCWV(Rule):
         for expt in conf.EXPT_SIM:
             suite = conf.EXPT_SIM[expt]
             inputs[f'tcwv_{expt}'] = (
-                conf.SIMDIR /
-                f'{suite}/share/cycle/{case}/engl/um/'
+                conf.SIMDIR / f'{suite}/share/cycle/{case}/engl/um/'
                 f'englaa_pa.merged.{case}.{suite}.m01s30i461.1h-mean.nc'
             )
         inputs['tcwv_era5'] = RegridERA5ToN216.rule_outputs(case, 'tcwv')['output']
@@ -844,7 +882,9 @@ class PlotTCWV(Rule):
         #     tcwv_mean[expt] = tcwv.mean(dim=['realization', 'time'])
 
         ds = xr.load_dataset(inputs['tcwv_output'])
-        fig, axes = plt.subplots(4, 4, figsize=(22, 10), subplot_kw={'projection': ccrs.PlateCarree()}, layout='constrained')
+        fig, axes = plt.subplots(
+            4, 4, figsize=(22, 10), subplot_kw={'projection': ccrs.PlateCarree()}, layout='constrained'
+        )
 
         norm = mpl.colors.BoundaryNorm(np.arange(0, 90, 10), ncolors=256)
         for ax, (expt, tcwv) in zip(axes[0, :], ds.items()):
@@ -884,13 +924,11 @@ class CalcMCSPCallingFreqData(Rule):
         for expt in ['vanillaMCSP', 'stochMCSP']:
             suite = conf.EXPT_SIM[expt]
             inputs[f'cf_{expt}'] = (
-                conf.SIMDIR /
-                f'{suite}/share/cycle/{case}/engl/um/'
+                conf.SIMDIR / f'{suite}/share/cycle/{case}/engl/um/'
                 f'englaa_pa.merged.{case}.{suite}.m01s05i993.1h-mean.nc'
             )
             inputs[f'pflux_{expt}'] = (
-                conf.SIMDIR /
-                f'{suite}/share/cycle/{case}/engl/um/'
+                conf.SIMDIR / f'{suite}/share/cycle/{case}/engl/um/'
                 f'englaa_pa.merged.{case}.{suite}.m01s05i216.1h-mean.nc'
             )
         return inputs
@@ -955,19 +993,20 @@ class PlotMCSPCallingFreq(Rule):
             'stochMCSP': precipmean_stochMCSP,
         }
 
-        fig, axes = plt.subplots(2, 3, figsize=(25.5, 8), subplot_kw={'projection': ccrs.PlateCarree()}, layout='constrained')
+        fig, axes = plt.subplots(
+            2, 3, figsize=(25.5, 8), subplot_kw={'projection': ccrs.PlateCarree()}, layout='constrained'
+        )
 
         for ax, expt in zip(axes[:, 0], ['vanillaMCSP', 'stochMCSP']):
             precipmean = precipmeans[expt]
             ax.set_title(f'precip. {expt}')
             ax.coastlines()
-            #bounds = np.arange(0, np.round(cfmax + 0.1, 1), 0.05)
+            # bounds = np.arange(0, np.round(cfmax + 0.1, 1), 0.05)
             bounds = [0, 0.125, 0.25, 0.5, 1, 2, 3, 4]
             cmap = mpl.cm.viridis
             norm = mpl.colors.BoundaryNorm(bounds, cmap.N, extend='neither')
             im = ax.pcolormesh(precipmean.longitude, precipmean.latitude, precipmean, norm=norm, cmap=cmap)
             plt.colorbar(im, ax=ax, label='precip. (mm h$^{-1}$)')
-
 
         for ax, expt in zip(axes[:, 1], ['vanillaMCSP', 'stochMCSP']):
             cfmean = cfmeans[expt]
@@ -975,7 +1014,7 @@ class PlotMCSPCallingFreq(Rule):
             pcc = scipy.stats.pearsonr(cfmean.values.flatten(), precipmean.values.flatten())[0]
             ax.set_title(f'MCSP calling freq. {expt} (PCC with precip.: {pcc:.3f})')
             ax.coastlines()
-            #bounds = np.arange(0, np.round(cfmax + 0.1, 1), 0.05)
+            # bounds = np.arange(0, np.round(cfmax + 0.1, 1), 0.05)
             bounds = [0, 0.025, 0.05, 0.1, 0.2, 0.4, 0.6, 0.8]
             cmap = mpl.cm.viridis
             norm = mpl.colors.BoundaryNorm(bounds, cmap.N, extend='neither')
@@ -1003,8 +1042,12 @@ class PlotMCSPCallingFreq(Rule):
                 cmap = mpl.cm.bwr
                 norm = mpl.colors.BoundaryNorm(bounds, cmap.N, extend='neither')
                 ax.set_facecolor('grey')
-                im = ax.pcolormesh(cfmean_vanillaMCSP.longitude, cfmean_vanillaMCSP.latitude, cfdata, norm=norm, cmap=cmap)
-                plt.colorbar(im, ax=ax, label='calling freq. (frac)', extend='max', ticks=[0, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20])
+                im = ax.pcolormesh(
+                    cfmean_vanillaMCSP.longitude, cfmean_vanillaMCSP.latitude, cfdata, norm=norm, cmap=cmap
+                )
+                plt.colorbar(
+                    im, ax=ax, label='calling freq. (frac)', extend='max', ticks=[0, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20]
+                )
 
         plt.savefig(outputs['fig'])
 
@@ -1021,15 +1064,14 @@ class FirstLookPlotERA5_500hPa_geopotential(Rule):
         month = case[4:6]
         inputs = {
             'era5geopot': (
-                conf.PATHS['datadir'] /
-                f'ecmwf-era5/misc/2020/{month}' /
-                f'ecmwf-era5_oper_an_pl.2024.{month}.1-11.geopotential_500hPa.nc'
+                conf.PATHS['datadir']
+                / f'ecmwf-era5/misc/2020/{month}'
+                / f'ecmwf-era5_oper_an_pl.2024.{month}.1-11.geopotential_500hPa.nc'
             ),
         }
         for expt, sim in conf.EXPT_SIM.items():
             inputs[f'{expt}geopot'] = (
-                conf.SIMDIR /
-                f'{sim}/share/cycle/{case}/engl/um/englaa_pb.merged.{case}.{sim}.m01s16i202.500hPa.nc'
+                conf.SIMDIR / f'{sim}/share/cycle/{case}/engl/um/englaa_pb.merged.{case}.{sim}.m01s16i202.500hPa.nc'
             )
         return inputs
 
@@ -1047,8 +1089,12 @@ class FirstLookPlotERA5_500hPa_geopotential(Rule):
         for expt, sim in conf.EXPT_SIM.items():
             for i in range(10):
                 outputs[f'{expt}fig_{i}'] = (
-                    conf.SIMDIR / conf.PATHS['figdir'] / 'N216sims' /
-                    case / 'geopot' / f'{expt}.geopot.{d0}.em{i:02d}.{time_offset}h.png'
+                    conf.SIMDIR
+                    / conf.PATHS['figdir']
+                    / 'N216sims'
+                    / case
+                    / 'geopot'
+                    / f'{expt}.geopot.{d0}.em{i:02d}.{time_offset}h.png'
                 )
         return outputs
 
@@ -1057,6 +1103,7 @@ class FirstLookPlotERA5_500hPa_geopotential(Rule):
         g = 9.80665
         levels = np.arange(460, 624, 4)
         lw = [1 if l % 20 != 0 else 2 for l in levels]
+
         def fmt(x):
             s = f"{x:.0f}"
             return s
@@ -1066,10 +1113,17 @@ class FirstLookPlotERA5_500hPa_geopotential(Rule):
 
         fig, ax = plt.subplots(subplot_kw={'projection': ccrs.PlateCarree()}, figsize=(30, 15), layout='constrained')
         # /10 converts to dam.
-        cs = ax.contour(era5geopot.longitude, era5geopot.latitude, era5geopot.sel(pressure_level=500) / 10, levels=levels, linewidths=lw, colors='k')
+        cs = ax.contour(
+            era5geopot.longitude,
+            era5geopot.latitude,
+            era5geopot.sel(pressure_level=500) / 10,
+            levels=levels,
+            linewidths=lw,
+            colors='k',
+        )
         ax.coastlines(color='grey')
 
-        ax.clabel(cs, cs.levels, inline=True, fmt=fmt, fontsize=10);
+        ax.clabel(cs, cs.levels, inline=True, fmt=fmt, fontsize=10)
         plt.savefig(outputs['era5fig'])
 
         for expt, sim in conf.EXPT_SIM.items():
@@ -1078,19 +1132,27 @@ class FirstLookPlotERA5_500hPa_geopotential(Rule):
                 simgeopot = xr.open_dataset(inputs[f'{expt}geopot']).geopotential_height
                 simgeopot = simgeopot.sel(realization=i).isel(time=0 + time_offset)
 
-                fig, ax = plt.subplots(subplot_kw={'projection': ccrs.PlateCarree()}, figsize=(30, 15), layout='constrained')
+                fig, ax = plt.subplots(
+                    subplot_kw={'projection': ccrs.PlateCarree()}, figsize=(30, 15), layout='constrained'
+                )
                 try:
                     # Occasionally there's an error deep in this call.
                     # /10 converts to dam.
-                    cs = ax.contour(simgeopot.longitude, simgeopot.latitude, simgeopot / 10, levels=levels, linewidths=lw, colors='k')
+                    cs = ax.contour(
+                        simgeopot.longitude,
+                        simgeopot.latitude,
+                        simgeopot / 10,
+                        levels=levels,
+                        linewidths=lw,
+                        colors='k',
+                    )
                     ax.coastlines(color='grey')
 
-                    ax.clabel(cs, cs.levels, inline=True, fmt=fmt, fontsize=10);
+                    ax.clabel(cs, cs.levels, inline=True, fmt=fmt, fontsize=10)
                     plt.savefig(outputs[f'{expt}fig_{i}'])
                 except:
                     outputs[f'{expt}fig_{i}'].touch()
                 plt.close('all')
-
 
 
 class Calc_geopot_dRMSE(Rule):
@@ -1105,8 +1167,7 @@ class Calc_geopot_dRMSE(Rule):
         suite = conf.EXPT_SIM[expt]
         inputs = {
             'geopot': (
-                conf.SIMDIR /
-                f'{suite}/share/cycle/{case}/engl/um/englaa_pb.merged.{case}.{suite}.m01s16i202.500hPa.nc'
+                conf.SIMDIR / f'{suite}/share/cycle/{case}/engl/um/englaa_pb.merged.{case}.{suite}.m01s16i202.500hPa.nc'
             )
         }
         return inputs
@@ -1132,8 +1193,7 @@ class Calc_geopot_dRMSE(Rule):
                 print(expt, ens_idx1, ens_idx2)
                 for time_idx in range(ntime):
                     dRMSE_data[ens_idx1, ens_idx2, time_idx] = rmse(
-                        simgeopot[ens_idx1, time_idx],
-                        simgeopot[ens_idx2, time_idx]
+                        simgeopot[ens_idx1, time_idx], simgeopot[ens_idx2, time_idx]
                     )
         dRMSE = xr.DataArray(
             dRMSE_data,
@@ -1141,9 +1201,10 @@ class Calc_geopot_dRMSE(Rule):
                 'realization1': simgeopot['realization'].values,
                 'realization2': simgeopot['realization'].values,
                 'time': simgeopot['time'],
-            }
+            },
         )
         utils.to_netcdf_tmp_then_copy(dRMSE, outputs['dRMSE'])
+
 
 class Calc_geopot_eRMSE(Rule):
     rule_matrix = {
@@ -1159,18 +1220,18 @@ class Calc_geopot_eRMSE(Rule):
         if domain == 'global':
             inputs = {
                 'era5geopot': RegridERA5ToN216.rule_outputs(case, 'z')['output'],
-                'simgeopot' : (
-                    conf.SIMDIR /
-                    f'{suite}/share/cycle/{case}/engl/um/englaa_pb.merged.{case}.{suite}.m01s16i202.500hPa.nc'
-                )
+                'simgeopot': (
+                    conf.SIMDIR
+                    / f'{suite}/share/cycle/{case}/engl/um/englaa_pb.merged.{case}.{suite}.m01s16i202.500hPa.nc'
+                ),
             }
         elif domain == 'tropics':
             inputs = {
                 'era5geopot': RegridERA5ToN216.rule_outputs(case, 'z')['output'],
-                'simgeopot' : (
-                    conf.SIMDIR /
-                    f'{suite}/share/cycle/{case}/engl/um/englaa_pb.merged.{case}.{suite}.m01s16i202.500hPa.nc'
-                )
+                'simgeopot': (
+                    conf.SIMDIR
+                    / f'{suite}/share/cycle/{case}/engl/um/englaa_pb.merged.{case}.{suite}.m01s16i202.500hPa.nc'
+                ),
             }
         return inputs
 
@@ -1191,7 +1252,9 @@ class Calc_geopot_eRMSE(Rule):
         if domain == 'tropics':
             simgeopot = xr.open_dataset(inputs['simgeopot']).sel(latitude=slice(-30, 30)).geopotential_height.load()
             # Rem. ERA5 starts at 00:00, sims at 04:00.
-            era5geopot = xr.load_dataarray(inputs['era5geopot']).sel(latitude=slice(-30, 30)).isel(valid_time=slice(4, None)) / g
+            era5geopot = (
+                xr.load_dataarray(inputs['era5geopot']).sel(latitude=slice(-30, 30)).isel(valid_time=slice(4, None)) / g
+            )
         elif domain == 'global':
             simgeopot = xr.open_dataset(inputs['simgeopot']).geopotential_height.load()
             # # Rem. ERA5 starts at 00:00, sims at 04:00.
@@ -1211,12 +1274,14 @@ class Calc_geopot_eRMSE(Rule):
             coords={
                 'realization': simgeopot['realization'],
                 'time': simgeopot['time'],
-            }
+            },
         )
         utils.to_netcdf_tmp_then_copy(eRMSE, outputs['eRMSE'])
 
 
-def plot_geopot_spread_error_ts(expt_dRMSE, expt_eRMSE, smooth=False, xlim='full', show_error_minus_spread=False, ens='full'):
+def plot_geopot_spread_error_ts(
+    expt_dRMSE, expt_eRMSE, smooth=False, xlim='full', show_error_minus_spread=False, ens='full'
+):
     ntime = len(expt_eRMSE['ctrl'].time)
 
     fig, ax = plt.subplots(layout='constrained')
@@ -1238,8 +1303,8 @@ def plot_geopot_spread_error_ts(expt_dRMSE, expt_eRMSE, smooth=False, xlim='full
         dRMSE_ts = dRMSE.mean(dim=['realization1', 'realization2']).values
         eRMSE_ts = expt_eRMSE[expt].mean(dim=['realization']).values
         if smooth:
-            dRMSE_ts = np.convolve(dRMSE_ts, np.ones((smooth, )) / smooth, mode='same')
-            eRMSE_ts = np.convolve(eRMSE_ts, np.ones((smooth, )) / smooth, mode='same')
+            dRMSE_ts = np.convolve(dRMSE_ts, np.ones((smooth,)) / smooth, mode='same')
+            eRMSE_ts = np.convolve(eRMSE_ts, np.ones((smooth,)) / smooth, mode='same')
         c = cs[i]
         ax.plot(eRMSE_ts, color=c, label=f'{expt} error')
         ax.plot(dRMSE_ts, ls='--', color=c, label=f'{expt} spread')
@@ -1265,6 +1330,7 @@ def plot_geopot_spread_error_ts(expt_dRMSE, expt_eRMSE, smooth=False, xlim='full
     ax.legend(ncol=len(conf.EXPT_SIM))
     ax.set_xlabel('time (day)')
 
+
 class PlotGeopotSpreadError(Rule):
     rule_matrix = {
         'plot_kwargs': [
@@ -1282,21 +1348,16 @@ class PlotGeopotSpreadError(Rule):
     @staticmethod
     def rule_inputs(plot_kwargs, case, domain):
         inputs = {
-            f'{expt}_eRMSE': Calc_geopot_eRMSE.rule_outputs(expt, case, domain)['eRMSE']
-            for expt in conf.EXPT_SIM
+            f'{expt}_eRMSE': Calc_geopot_eRMSE.rule_outputs(expt, case, domain)['eRMSE'] for expt in conf.EXPT_SIM
         }
-        inputs.update({
-            f'{expt}_dRMSE': Calc_geopot_dRMSE.rule_outputs(expt, case, domain)['dRMSE']
-            for expt in conf.EXPT_SIM
-        })
+        inputs.update(
+            {f'{expt}_dRMSE': Calc_geopot_dRMSE.rule_outputs(expt, case, domain)['dRMSE'] for expt in conf.EXPT_SIM}
+        )
         return inputs
 
     @staticmethod
     def rule_outputs(plot_kwargs, case, domain):
-        kwstr = '-'.join(
-            f'{k}={v}'
-            for k, v in plot_kwargs.items()
-        )
+        kwstr = '-'.join(f'{k}={v}' for k, v in plot_kwargs.items())
         kwstr = kwstr.replace(' ', '')
         return {
             'fig': (
@@ -1333,23 +1394,26 @@ class PlotAllCasesGeopotSpreadError(Rule):
             for expt in conf.EXPT_SIM
             for case in conf.CASES
         }
-        inputs.update({
-            f'{case}_{expt}_dRMSE': Calc_geopot_dRMSE.rule_outputs(expt, case, domain)['dRMSE']
-            for expt in conf.EXPT_SIM
-            for case in conf.CASES
-        })
+        inputs.update(
+            {
+                f'{case}_{expt}_dRMSE': Calc_geopot_dRMSE.rule_outputs(expt, case, domain)['dRMSE']
+                for expt in conf.EXPT_SIM
+                for case in conf.CASES
+            }
+        )
         return inputs
 
     @staticmethod
     def rule_outputs(plot_kwargs, domain):
-        kwstr = '-'.join(
-            f'{k}={v}'
-            for k, v in plot_kwargs.items()
-        )
+        kwstr = '-'.join(f'{k}={v}' for k, v in plot_kwargs.items())
         kwstr = kwstr.replace(' ', '')
         return {
             'fig': (
-                conf.PATHS['figdir'] / 'N216sims' / 'all_cases' / 'geopot' / f'geopot_spread_error.all_cases.{domain}.{kwstr}.png'
+                conf.PATHS['figdir']
+                / 'N216sims'
+                / 'all_cases'
+                / 'geopot'
+                / f'geopot_spread_error.all_cases.{domain}.{kwstr}.png'
             ),
         }
 
@@ -1362,7 +1426,7 @@ class PlotAllCasesGeopotSpreadError(Rule):
             np.datetime64('2020-01-01T04:00:00'),
             np.datetime64('2020-01-11T04:00:00'),
             np.timedelta64(1, 'h'),
-            dtype='datetime64[ns]'
+            dtype='datetime64[ns]',
         )
 
         # tricky_code

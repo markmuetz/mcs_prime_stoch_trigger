@@ -3,6 +3,7 @@
 Downloads GMP IMERG (late/final) daily data for Asia.
 
 Will not download same file twice"""
+
 import datetime as dt
 from pathlib import Path
 from random import randint
@@ -46,6 +47,7 @@ downloader = Remake(config=dict(slurm=slurm_config))
 
 class GpmDatetime:
     """Useful fmt_methods added to datetime class"""
+
     @staticmethod
     def fmt_date(date):
         return date.strftime('%Y%m%d')
@@ -85,7 +87,7 @@ def get_from_gpm(url, filename, num_retries=20):
             result = requests.get(url)
             result.raise_for_status()
             print(f'  write contents to {filename}')
-            with open(filename,'wb') as f:
+            with open(filename, 'wb') as f:
                 f.write(result.content)
             break
         except Exception as e:
@@ -102,23 +104,24 @@ def gen_dates_urls_filenames(filename_tpl, url_tpl, dates):
     for date in dates:
         curr_date = date.to_pydatetime()
         next_date = curr_date + dt.timedelta(minutes=30)
-        filename = filename_tpl.format(datestr=GpmDatetime.fmt_date(curr_date),
-                                       start_time=GpmDatetime.fmt_time(curr_date),
-                                       end_time=GpmDatetime.fmt_time(next_date - dt.timedelta(seconds=1)),
-                                       minutes=GpmDatetime.fmt_minutes(curr_date))
-        url = url_tpl.format(year=GpmDatetime.fmt_year(curr_date),
-                             doy=GpmDatetime.fmt_doy(curr_date),
-                             filename=filename)
+        filename = filename_tpl.format(
+            datestr=GpmDatetime.fmt_date(curr_date),
+            start_time=GpmDatetime.fmt_time(curr_date),
+            end_time=GpmDatetime.fmt_time(next_date - dt.timedelta(seconds=1)),
+            minutes=GpmDatetime.fmt_minutes(curr_date),
+        )
+        url = url_tpl.format(
+            year=GpmDatetime.fmt_year(curr_date), doy=GpmDatetime.fmt_doy(curr_date), filename=filename
+        )
         yield curr_date, url, filename
         curr_date = next_date
 
 
-
-
 class GpmImerg30MinDownload(TaskRule):
     rule_inputs = {}
+
     @staticmethod
-    def rule_outputs (date_range_kwargs):
+    def rule_outputs(date_range_kwargs):
         dates = pd.date_range(**date_range_kwargs)
         s = dates[0]
         e = dates[-1]
@@ -133,9 +136,7 @@ class GpmImerg30MinDownload(TaskRule):
         outputs = {}
         filename_tpl = FINAL_30MIN_FILENAME_TPL
         url_tpl = FINAL_30MIN_URL_TPL
-        dates_urls_filenames = list(gen_dates_urls_filenames(filename_tpl,
-                                                             url_tpl,
-                                                             dates))
+        dates_urls_filenames = list(gen_dates_urls_filenames(filename_tpl, url_tpl, dates))
         all_filenames = []
         for i, (date, url, filename) in enumerate(dates_urls_filenames):
             output_filename = self.outputs['output_filenames'].parent / f'{date.month:02d}/{date.day:02d}' / filename
@@ -158,4 +159,3 @@ class GpmImerg30MinDownload(TaskRule):
             print(f'No files to download for {self.date_range_kwargs}')
 
         self.outputs['output_filenames'].write_text('\n'.join(all_filenames) + '\n')
-

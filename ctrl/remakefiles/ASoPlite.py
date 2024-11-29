@@ -44,8 +44,28 @@ class ASoPlite:
         self.time_mean = time_mean
         self.biperiodic = biperiodic
         self.config = {
-            'precip_prob_matrix_bins_mmpday': np.array([0, 1, 2, 4, 6, 9, 12, 16, 20, 25, 30, 40, 60, 90, 130, 180, 100000]),
-            'precip_prob_matrix_boundaries': [1e-5, 2e-5, 3e-5, 4e-5, 7e-5, 1e-4, 2e-4, 4e-4, 7e-4, 1e-3, 2e-3, 4e-3, 7e-3, 1e-2, 7e-2, 1e-1, 1],
+            'precip_prob_matrix_bins_mmpday': np.array(
+                [0, 1, 2, 4, 6, 9, 12, 16, 20, 25, 30, 40, 60, 90, 130, 180, 100000]
+            ),
+            'precip_prob_matrix_boundaries': [
+                1e-5,
+                2e-5,
+                3e-5,
+                4e-5,
+                7e-5,
+                1e-4,
+                2e-4,
+                4e-4,
+                7e-4,
+                1e-3,
+                2e-3,
+                4e-3,
+                7e-3,
+                1e-2,
+                7e-2,
+                1e-1,
+                1,
+            ],
             'fractional_contrib_thresh_mmpday': np.array([0.005, 10, 50, 100]),
         }
         self.config.update(user_config)
@@ -59,7 +79,11 @@ class ASoPlite:
             self.fractional_contrib,
             dims=('frac_contrip_precip_bin_lower', 'latitude', 'longitude'),
             coords=dict(
-                frac_contrip_precip_bin_lower=('frac_contrip_precip_bin_lower', self.fractional_contrib_thresh_mmpday, {'units': 'mm day-1'}),
+                frac_contrip_precip_bin_lower=(
+                    'frac_contrip_precip_bin_lower',
+                    self.fractional_contrib_thresh_mmpday,
+                    {'units': 'mm day-1'},
+                ),
                 latitude=self.da.latitude,
                 longitude=self.da.longitude,
             ),
@@ -68,15 +92,29 @@ class ASoPlite:
         ds['precip_prob_hist'] = xr.DataArray(
             self.precip_prob_hist,
             dims='precip_prob_bin_lower',
-            coords=dict(precip_prob_bin_lower=('precip_prob_bin_lower', self.precip_prob_matrix_bins_mmpday[:-1], {'units': 'mm day-1'})),
+            coords=dict(
+                precip_prob_bin_lower=(
+                    'precip_prob_bin_lower',
+                    self.precip_prob_matrix_bins_mmpday[:-1],
+                    {'units': 'mm day-1'},
+                )
+            ),
         )
 
         ds['precip_prob_matrix'] = xr.DataArray(
             self.precip_prob_matrix,
             dims=('precip_prob_bin_lower_t0', 'precip_prob_bin_lower_t1'),
             coords=dict(
-                precip_prob_bin_lower_t0=('precip_prob_bin_lower_t0', self.precip_prob_matrix_bins_mmpday[1:], {'units': 'mm day-1'}),
-                precip_prob_bin_lower_t1=('precip_prob_bin_lower_t1', self.precip_prob_matrix_bins_mmpday[1:], {'units': 'mm day-1'}),
+                precip_prob_bin_lower_t0=(
+                    'precip_prob_bin_lower_t0',
+                    self.precip_prob_matrix_bins_mmpday[1:],
+                    {'units': 'mm day-1'},
+                ),
+                precip_prob_bin_lower_t1=(
+                    'precip_prob_bin_lower_t1',
+                    self.precip_prob_matrix_bins_mmpday[1:],
+                    {'units': 'mm day-1'},
+                ),
             ),
         )
 
@@ -136,7 +174,22 @@ class ASoPlite:
             fig, axes = plt.subplots(nplots, 1, subplot_kw={'projection': ccrs.PlateCarree()}, layout='constrained')
         thresh = self.fractional_contrib_thresh_mmpday / 24
 
-        html_colours = ['#2166ac', '#4393c3', '#92c5de', '#d1e5f0', '#f7f7f7', '#fddbc7', '#f4a582', '#d6604d', '#b2182b', '#ec7014', '#fe9929', '#fec44f', '#fee391', '#fff7bc']
+        html_colours = [
+            '#2166ac',
+            '#4393c3',
+            '#92c5de',
+            '#d1e5f0',
+            '#f7f7f7',
+            '#fddbc7',
+            '#f4a582',
+            '#d6604d',
+            '#b2182b',
+            '#ec7014',
+            '#fe9929',
+            '#fec44f',
+            '#fee391',
+            '#fff7bc',
+        ]
         under_colour = '#2166ac'
         over_colour = '#fff7bc'
 
@@ -188,7 +241,13 @@ class ASoPlite:
         # If using imshow, this is bizarly sensitive to the *exact* figsize. Very weird.
         ax2 = ax.twinx()
         print(self.ds.precip_prob_hist)
-        ax2.plot(np.arange(0.5, len(self.ds.precip_prob_hist.values) + 0.5), self.ds.precip_prob_hist.values, ls='--', marker='o', c='k')
+        ax2.plot(
+            np.arange(0.5, len(self.ds.precip_prob_hist.values) + 0.5),
+            self.ds.precip_prob_hist.values,
+            ls='--',
+            marker='o',
+            c='k',
+        )
         ax2.set_yscale('log')
 
         # Bad things happen with alignment of ax if you use imshow.
@@ -197,13 +256,20 @@ class ASoPlite:
 
         def cbar_fmt_tick(v, pos):
             return f'{v:.0e}'
-        plt.colorbar(im, ax=ax, ticks=boundaries[:-1], format=FuncFormatter(cbar_fmt_tick), boundaries=np.linspace(0, 1, len(boundaries) - 1))
+
+        plt.colorbar(
+            im,
+            ax=ax,
+            ticks=boundaries[:-1],
+            format=FuncFormatter(cbar_fmt_tick),
+            boundaries=np.linspace(0, 1, len(boundaries) - 1),
+        )
 
         dbins_mmpday = self.precip_prob_matrix_bins_mmpday[1:-1]
         ticks = np.arange(len(dbins_mmpday) + 2)
         ticklabels = ['<1'] + [f'{b:.0f}' for b in dbins_mmpday] + ['>180']
         ax.set_xticks(ticks, ticklabels)
-        ax.set_yticks(ticks, ticklabels);
+        ax.set_yticks(ticks, ticklabels)
 
         ax2.set_ylim((1e-4, 1e0))
 
@@ -230,7 +296,9 @@ class ASoPlite:
             print(i, j)
             shift_lon = i - 3
             shift_lat = j - 3
-            self.spat_corr[j, i] = scipy.stats.pearsonr(values_flat, np.roll(np.roll(values, shift_lon, axis=-1), shift_lat, axis=-2)[xyslice].flatten())[0]
+            self.spat_corr[j, i] = scipy.stats.pearsonr(
+                values_flat, np.roll(np.roll(values, shift_lon, axis=-1), shift_lat, axis=-2)[xyslice].flatten()
+            )[0]
         return self.spat_corr
 
     def plot_7x7_spat_corr(self, ax=None):
@@ -238,7 +306,19 @@ class ASoPlite:
             plt.figure()
             ax = plt.gca()
         spat_corr = self.ds.spat_corr.values
-        html_colours = ['#e8e4e7', '#fecd61', '#d5c24e', '#9ec039', '#55b545', '#399e69', '#398b79', '#37767c', '#2a6089', '#2b449d', '#361f71']
+        html_colours = [
+            '#e8e4e7',
+            '#fecd61',
+            '#d5c24e',
+            '#9ec039',
+            '#55b545',
+            '#399e69',
+            '#398b79',
+            '#37767c',
+            '#2a6089',
+            '#2b449d',
+            '#361f71',
+        ]
         under_colour = '#e8e4e7'
         over_colour = '#361f71'
 
@@ -286,7 +366,7 @@ class ASoPlite:
 
             self.spat_temp_corr[k, j, i] = scipy.stats.pearsonr(
                 da.values[xyslice1].flatten(),
-                np.roll(np.roll(da.values, shift_lon, axis=-1), shift_lat, axis=-2)[xyslice2].flatten()
+                np.roll(np.roll(da.values, shift_lon, axis=-1), shift_lat, axis=-2)[xyslice2].flatten(),
             )[0]
         return self.spat_temp_corr
 
@@ -294,7 +374,19 @@ class ASoPlite:
         if ax is None:
             plt.figure()
             ax = plt.gca()
-        html_colours = ['#e8e4e7', '#fecd61', '#d5c24e', '#9ec039', '#55b545', '#399e69', '#398b79', '#37767c', '#2a6089', '#2b449d', '#361f71']
+        html_colours = [
+            '#e8e4e7',
+            '#fecd61',
+            '#d5c24e',
+            '#9ec039',
+            '#55b545',
+            '#399e69',
+            '#398b79',
+            '#37767c',
+            '#2a6089',
+            '#2b449d',
+            '#361f71',
+        ]
         under_colour = '#e8e4e7'
         over_colour = '#361f71'
 
@@ -315,6 +407,7 @@ class ASoPlite:
                 spat_temp_corr2[i, j - 1] = self.ds.spat_temp_corr.values[i, :, :][d == j].mean()
         sns.heatmap(pd.DataFrame(spat_temp_corr2)[::-1], ax=ax, annot=True, norm=norm, cmap=cmap)
 
+
 rmk = Remake({})
 
 REGIONS = {
@@ -327,6 +420,7 @@ REGIONS = {
     'us': (245, 275, 32, 48),
 }
 
+
 class ASoPN216regional(Rule):
     rule_matrix = {
         'expt': ['imerg', 'ctrl', 'vanillaMCSP', 'stochMCSP'],
@@ -337,10 +431,13 @@ class ASoPN216regional(Rule):
     @staticmethod
     def rule_inputs(expt, region, coarsen_time):
         if expt == 'imerg':
-            inputs = {'precip': (
-                cu.PATHS['outdir'] / 'imerg_processed/N216grid/2020-07-01_04:00:00-2020-07-11_03:00:00/' /
-                '3B-HHR.MS.MRG.3IMERG.2020-07-01_04:00:00-2020-07-11_03:00:00.hourly.V07B.nc'
-            )}
+            inputs = {
+                'precip': (
+                    cu.PATHS['outdir']
+                    / 'imerg_processed/N216grid/2020-07-01_04:00:00-2020-07-11_03:00:00/'
+                    / '3B-HHR.MS.MRG.3IMERG.2020-07-01_04:00:00-2020-07-11_03:00:00.hourly.V07B.nc'
+                )
+            }
         else:
             suite = EXPTS[expt]
             inputs = {'precip': SIMDIR / f'{suite}/processed/{expt}/engla_pa.precip.nc'}
@@ -352,10 +449,7 @@ class ASoPN216regional(Rule):
 
     def rule_run(self):
         reg_extent = REGIONS[self.region]
-        lat_lon_sel = dict(
-            longitude=slice(reg_extent[0], reg_extent[1]),
-            latitude=slice(reg_extent[2], reg_extent[3])
-        )
+        lat_lon_sel = dict(longitude=slice(reg_extent[0], reg_extent[1]), latitude=slice(reg_extent[2], reg_extent[3]))
 
         if self.expt == 'imerg':
             da_precip = xr.open_dataarray(self.inputs['precip']).sel(**lat_lon_sel)
@@ -392,6 +486,7 @@ class PlotRegions(Rule):
 
         gl.top_labels = False
         gl.right_labels = False
+
         def f0_360to_m180_180(vs):
             return np.where(vs > 180, vs - 360, vs)
 
@@ -430,8 +525,9 @@ class PlotASoPN216regional(Rule):
         for expt in ['imerg', 'ctrl', 'vanillaMCSP', 'stochMCSP']:
             if expt == 'imerg':
                 inputs[f'precip_{expt}'] = (
-                    cu.PATHS['outdir'] / 'imerg_processed/N216grid/2020-07-01_04:00:00-2020-07-11_03:00:00/' /
-                    '3B-HHR.MS.MRG.3IMERG.2020-07-01_04:00:00-2020-07-11_03:00:00.hourly.V07B.nc'
+                    cu.PATHS['outdir']
+                    / 'imerg_processed/N216grid/2020-07-01_04:00:00-2020-07-11_03:00:00/'
+                    / '3B-HHR.MS.MRG.3IMERG.2020-07-01_04:00:00-2020-07-11_03:00:00.hourly.V07B.nc'
                 )
             else:
                 suite = EXPTS[expt]
@@ -451,10 +547,7 @@ class PlotASoPN216regional(Rule):
 
     def rule_run(self):
         reg_extent = REGIONS[self.region]
-        lat_lon_sel = dict(
-            longitude=slice(reg_extent[0], reg_extent[1]),
-            latitude=slice(reg_extent[2], reg_extent[3])
-        )
+        lat_lon_sel = dict(longitude=slice(reg_extent[0], reg_extent[1]), latitude=slice(reg_extent[2], reg_extent[3]))
 
         asops = {}
         for expt in ['imerg', 'ctrl', 'vanillaMCSP', 'stochMCSP']:
@@ -497,4 +590,3 @@ class PlotASoPN216regional(Rule):
             asop.plot_7x7_spat_temp_corr(ax=ax)
             ax.set_title(expt)
         plt.savefig(self.outputs['7x7_spat_temp_corr'])
-

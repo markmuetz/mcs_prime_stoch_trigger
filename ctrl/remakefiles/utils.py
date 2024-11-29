@@ -58,4 +58,3 @@ def to_netcdf_tmp_then_copy(ds, outpath, encoding=None):
 
     ds.to_netcdf(tmppath, encoding=encoding)
     shutil.move(tmppath, outpath)
-

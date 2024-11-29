@@ -23,4 +23,5 @@ for rule_name in rules:
             rule_name,
             inputs='all',
             # outputs='all',
-    ))
+        )
+    )
