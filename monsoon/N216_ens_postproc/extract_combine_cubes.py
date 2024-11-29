@@ -46,6 +46,10 @@ CONSTRAINTS = {
     ),
     'm01s05i993.1h-mean': iris.AttributeConstraint(STASH='m01s05i993'),
     'm01s30i461.1h-mean': iris.AttributeConstraint(STASH='m01s30i461'),
+    'm01s16i202.500hPa': (
+        iris.AttributeConstraint(STASH='m01s16i202') &
+        iris.Constraint(pressure=500),  # constrained load to just get 500 hPa.
+    ),
 }
 
 JOBS = list(product(CASES, SUITES, CONSTRAINTS))
@@ -60,12 +64,12 @@ JOBS = [
     if not (suite == 'u-di727' and constraint == 'm01s05i993.1h-mean')
 ]
 
-def gen_outpath(case, suite, stash_code):
+def gen_outpath(case, suite, stash_code, stream='a'):
     return (Path(f'/projects/mcsprime/mamue/cylc-run/{suite}/share/cycle/{case}/engl/um') /
-            Path(f'englaa_pa.merged.{case}.{suite}.{stash_code}.nc'))
+            Path(f'englaa_p{stream}.merged.{case}.{suite}.{stash_code}.nc'))
 
 
-def run_job(case, suite, constraint_key):
+def run_job(case, suite, constraint_key, stream='a'):
     cwd = os.getcwd()
     os.chdir(f'/projects/mcsprime/mamue/cylc-run/{suite}/share/cycle/{case}/engl/um')
 
@@ -76,7 +80,7 @@ def run_job(case, suite, constraint_key):
         return
     constraint = CONSTRAINTS[stash_code]
 
-    outpath = gen_outpath(case, suite, stash_code)
+    outpath = gen_outpath(case, suite, stash_code, stream=stream)
     if outpath.exists():
         print(outpath, 'already exists')
         raise Exception(f'{outpath} already exists')
@@ -84,7 +88,10 @@ def run_job(case, suite, constraint_key):
     cubes_for_constraint = []
     for i in range(10):
         print(i)
-        cube = iris.load_cube(f'em{i}/englaa_pa???.pp', constraint)
+        if stream == 'a':
+            cube = iris.load_cube(f'em{i}/englaa_pa???.pp', constraint)
+        elif stream == 'b':
+            cube = iris.load_cube(f'em{i}/englaa_pb???.pp', constraint)
         if i == 0:
             coord = iris.coords.AuxCoord(points=np.array([0], dtype=np.int32), standard_name='realization', units='1')
             cube.add_aux_coord(coord)

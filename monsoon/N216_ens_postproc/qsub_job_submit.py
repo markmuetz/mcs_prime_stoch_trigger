@@ -19,7 +19,7 @@ pbs_tpl = """
 module load scitools
 which python
 cd {cwd}
-python extract_combine_cubes.py {case} {suite} {stash_code}
+python extract_combine_cubes.py {case} {suite} {stash_code} {stream}
 """
 
 def main():
@@ -31,6 +31,10 @@ def main():
             continue
 
         key = f'{case}_{suite}_{stash_code}'
+        if stash_code == 'm01s16i202.500hPa':
+            stream = 'b'
+        else:
+            stream = 'a'
         print(key)
         scriptpath = Path(f'pbs_scripts/script_{key}.sh')
         scriptpath.write_text(pbs_tpl.format(
@@ -39,6 +43,7 @@ def main():
             cwd=Path.cwd(),
             case=case,
             suite=suite,
+            stream=stream,
             stash_code=stash_code,
         ))
         cmd = f'qsub {scriptpath}'
