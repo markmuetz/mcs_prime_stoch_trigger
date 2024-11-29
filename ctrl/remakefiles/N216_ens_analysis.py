@@ -89,7 +89,7 @@ class RegridImergToN216(Rule):
         if regrid_method == 'cons':
             # Use conservative method.
             # Note, this has a far larger effect than I anticipated.
-            # It changes to interp. of the spread-skill plots substantially, so that
+            # It changes to interp. of the spread-error plots substantially, so that
             # vanillaMCSP is best for no spatial avging.
             imerg_regridder = xe.Regridder(imerg, n216ds, method='conservative', periodic=True)
         else:
@@ -446,7 +446,7 @@ class Calc_dRMSE(Rule):
 
 
 plot_sigmas = [0, 2, 4]
-def plot_spread_skill_ts(expt_dRMSE, expt_eRMSE, smooth=False, xlim='full', show_skill_minus_spread=False, ens='full'):
+def plot_spread_error_ts(expt_dRMSE, expt_eRMSE, smooth=False, xlim='full', show_error_minus_spread=False, ens='full'):
     ntime = len(expt_eRMSE['ctrl'].time)
 
     fig, axes = plt.subplots(1, len(plot_sigmas), sharex=True, layout='constrained')
@@ -471,10 +471,10 @@ def plot_spread_skill_ts(expt_dRMSE, expt_eRMSE, smooth=False, xlim='full', show
                 dRMSE_ts = np.convolve(dRMSE_ts, np.ones((smooth, )) / smooth, mode='same')
                 eRMSE_ts = np.convolve(eRMSE_ts, np.ones((smooth, )) / smooth, mode='same')
             c = cs[i]
-            ax.plot(eRMSE_ts, color=c, label=f'{expt} skill')
+            ax.plot(eRMSE_ts, color=c, label=f'{expt} error')
             ax.plot(dRMSE_ts, ls='--', color=c, label=f'{expt} spread')
-            if show_skill_minus_spread:
-                ax.plot(eRMSE_ts - dRMSE_ts, ls=':', color=c, label=f'{expt} skill - spread')
+            if show_error_minus_spread:
+                ax.plot(dRMSE_ts - eRMSE_ts, ls=':', color=c, label=f'{expt} spread - error')
                 ax.axhline(y=0, ls='-', lw=0.5, color='k')
 
         times_half_days_hours = np.arange(0, ntime + 1, 12)
@@ -489,7 +489,7 @@ def plot_spread_skill_ts(expt_dRMSE, expt_eRMSE, smooth=False, xlim='full', show
         ax.set_xlim((smooth, 240 - smooth))
     for ax in axes:
         ax.relim()
-        if not show_skill_minus_spread:
+        if not show_error_minus_spread:
             ax.set_ylim((0, None))
     if len(axes) % 2 == 1:
         midax = axes[len(axes) // 2]
@@ -502,7 +502,7 @@ def plot_spread_skill_ts(expt_dRMSE, expt_eRMSE, smooth=False, xlim='full', show
         for ax in axes.flatten():
             ax.set_xlabel('time (day)')
 
-class PlotSpreadSkill(Rule):
+class PlotSpreadError(Rule):
     @staticmethod
     def rule_inputs(plot_kwargs, case, regrid_method):
         inputs = {
@@ -522,16 +522,16 @@ class PlotSpreadSkill(Rule):
             for k, v in plot_kwargs.items()
         )
         kwstr = kwstr.replace(' ', '')
-        return {'fig': conf.PATHS['figdir'] / 'N216sims' / case / f'spread_skill.{case}.{kwstr}.{regrid_method}.png'}
+        return {'fig': conf.PATHS['figdir'] / 'N216sims' / case / f'spread_error.{case}.{kwstr}.{regrid_method}.png'}
 
     rule_matrix = {
         'plot_kwargs': [
-            dict(smooth=False, show_skill_minus_spread=True),
+            dict(smooth=False, show_error_minus_spread=True),
             dict(smooth=24),
             dict(xlim=(0, 20)),
             dict(xlim=(0, 48)),
-            dict(smooth=False, show_skill_minus_spread=True, ens='full'),
-            dict(smooth=False, show_skill_minus_spread=True, ens='red'),
+            dict(smooth=False, show_error_minus_spread=True, ens='full'),
+            dict(smooth=False, show_error_minus_spread=True, ens='red'),
         ],
         'case': conf.CASES,
         'regrid_method': ['cons', 'non_cons'],
@@ -540,10 +540,87 @@ class PlotSpreadSkill(Rule):
 
     @staticmethod
     def rule_run(inputs, outputs, plot_kwargs, case, regrid_method):
-        print(plot_kwargs)
+        print(plot_kwargs, case, regrid_method)
+
         expt_eRMSE = {expt: xr.load_dataarray(inputs[f'{expt}_eRMSE']) for expt in conf.EXPT_SIM}
         expt_dRMSE = {expt: xr.load_dataarray(inputs[f'{expt}_dRMSE']) for expt in conf.EXPT_SIM}
-        plot_spread_skill_ts(expt_dRMSE, expt_eRMSE, **plot_kwargs)
+        print(expt_eRMSE)
+        print(expt_dRMSE)
+        plot_spread_error_ts(expt_dRMSE, expt_eRMSE, **plot_kwargs)
+        plt.savefig(outputs['fig'])
+
+
+class PlotAllCasesSpreadError(Rule):
+    rule_matrix = {
+        'plot_kwargs': [
+            dict(smooth=False, show_error_minus_spread=True),
+            dict(smooth=24),
+            dict(xlim=(0, 20)),
+            dict(xlim=(0, 48)),
+            dict(smooth=False, show_error_minus_spread=True, ens='full'),
+            dict(smooth=False, show_error_minus_spread=True, ens='red'),
+        ],
+        'regrid_method': ['cons', 'non_cons'],
+    }
+
+    @staticmethod
+    def rule_inputs(plot_kwargs, regrid_method):
+        inputs = {
+            f'{case}_{expt}_eRMSE': Calc_eRMSE.rule_outputs(expt, case, regrid_method)['eRMSE']
+            for expt in conf.EXPT_SIM
+            for case in conf.CASES
+        }
+        inputs.update({
+            f'{case}_{expt}_dRMSE': Calc_dRMSE.rule_outputs(expt, case)['dRMSE']
+            for expt in conf.EXPT_SIM
+            for case in conf.CASES
+        })
+        return inputs
+
+    @staticmethod
+    def rule_outputs(plot_kwargs, regrid_method):
+        kwstr = '-'.join(
+            f'{k}={v}'
+            for k, v in plot_kwargs.items()
+        )
+        kwstr = kwstr.replace(' ', '')
+        return {'fig': conf.PATHS['figdir'] / 'N216sims' / 'all_cases' / f'spread_error.all_cases.{kwstr}.{regrid_method}.png'}
+
+    @staticmethod
+    def rule_run(inputs, outputs, plot_kwargs, regrid_method):
+        print(plot_kwargs, regrid_method)
+        # expt_eRMSE = {expt: xr.load_dataarray(inputs[f'{expt}_eRMSE']) for expt in conf.EXPT_SIM}
+        # expt_dRMSE = {expt: xr.load_dataarray(inputs[f'{expt}_dRMSE']) for expt in conf.EXPT_SIM}
+        # Give all datasets identical times so that they can be concatted along this dim.
+        times = np.arange(
+            np.datetime64('2020-01-01T04:00:00'),
+            np.datetime64('2020-01-11T04:00:00'),
+            np.timedelta64(1, 'h'),
+            dtype='datetime64[ns]'
+        )
+
+        # See comment in PlotAllCasesGeopotSpreadError.
+        # tricky_code
+        expt_eRMSE = {}
+        expt_dRMSE = {}
+        for expt in conf.EXPT_SIM:
+            case_expt_eRMSEs = []
+            case_expt_dRMSEs = []
+            for case in conf.CASES:
+                # TODO:
+                if '04' in case:
+                    # There is an issue with the data for April for u-dg135.
+                    # Skip for now.
+                    continue
+                case_expt_eRMSE = xr.load_dataarray(inputs[f'{case}_{expt}_eRMSE'])
+                case_expt_dRMSE = xr.load_dataarray(inputs[f'{case}_{expt}_dRMSE'])
+                case_expt_eRMSE.time.values[:] = times
+                case_expt_dRMSE.time.values[:] = times
+                case_expt_eRMSEs.append(case_expt_eRMSE)
+                case_expt_dRMSEs.append(case_expt_dRMSE)
+            expt_eRMSE[expt] = xr.concat(case_expt_eRMSEs, dim='case').mean(dim='case')
+            expt_dRMSE[expt] = xr.concat(case_expt_dRMSEs, dim='case').mean(dim='case')
+        plot_spread_error_ts(expt_dRMSE, expt_eRMSE, **plot_kwargs)
         plt.savefig(outputs['fig'])
 
 
@@ -1019,7 +1096,7 @@ class FirstLookPlotERA5_500hPa_geopotential(Rule):
 class Calc_geopot_dRMSE(Rule):
     rule_matrix = {
         'expt': list(conf.EXPT_SIM.keys()),
-        'case': conf.CASES[:1],
+        'case': conf.CASES,
         'domain': ['global', 'tropics'],
     }
 
@@ -1046,7 +1123,7 @@ class Calc_geopot_dRMSE(Rule):
             simgeopot = xr.open_dataset(inputs['geopot']).sel(latitude=slice(-30, 30)).geopotential_height.load()
         elif domain == 'global':
             simgeopot = xr.open_dataset(inputs['geopot']).geopotential_height.load()
-        # print(simgeopot)
+        print(simgeopot)
         ntime = len(simgeopot.time)
         dRMSE_data = np.full((nens, nens, ntime), np.nan)
 
@@ -1071,7 +1148,7 @@ class Calc_geopot_dRMSE(Rule):
 class Calc_geopot_eRMSE(Rule):
     rule_matrix = {
         'expt': list(conf.EXPT_SIM.keys()),
-        'case': conf.CASES[:1],
+        'case': conf.CASES,
         'domain': ['global', 'tropics'],
     }
 
@@ -1081,9 +1158,7 @@ class Calc_geopot_eRMSE(Rule):
         month = case[4:6]
         if domain == 'global':
             inputs = {
-                # TODO:
-                # 'era5geopot': RegridERA5ToN216.rule_outputs(case, 'z')['output'],
-                'era5geopot': RegridERA5ToN216.rule_inputs(case, 'z')['era5_z'],
+                'era5geopot': RegridERA5ToN216.rule_outputs(case, 'z')['output'],
                 'simgeopot' : (
                     conf.SIMDIR /
                     f'{suite}/share/cycle/{case}/engl/um/englaa_pb.merged.{case}.{suite}.m01s16i202.500hPa.nc'
@@ -1091,7 +1166,6 @@ class Calc_geopot_eRMSE(Rule):
             }
         elif domain == 'tropics':
             inputs = {
-                # TODO:
                 'era5geopot': RegridERA5ToN216.rule_outputs(case, 'z')['output'],
                 'simgeopot' : (
                     conf.SIMDIR /
@@ -1109,6 +1183,8 @@ class Calc_geopot_eRMSE(Rule):
     @staticmethod
     def rule_run(inputs, outputs, expt, case, domain):
         g = 9.80665
+        print(expt, case, domain)
+        # Using regridded ERA5 now.
         # TODO: Need to regrid ERA5 first, but amazingly RMSE seems to work even tho they're
         # on different grids??!!??
         # Why is the latitude the other way round on this???
@@ -1140,7 +1216,7 @@ class Calc_geopot_eRMSE(Rule):
         utils.to_netcdf_tmp_then_copy(eRMSE, outputs['eRMSE'])
 
 
-def plot_geopot_spread_skill_ts(expt_dRMSE, expt_eRMSE, smooth=False, xlim='full', show_skill_minus_spread=False, ens='full'):
+def plot_geopot_spread_error_ts(expt_dRMSE, expt_eRMSE, smooth=False, xlim='full', show_error_minus_spread=False, ens='full'):
     ntime = len(expt_eRMSE['ctrl'].time)
 
     fig, ax = plt.subplots(layout='constrained')
@@ -1165,10 +1241,10 @@ def plot_geopot_spread_skill_ts(expt_dRMSE, expt_eRMSE, smooth=False, xlim='full
             dRMSE_ts = np.convolve(dRMSE_ts, np.ones((smooth, )) / smooth, mode='same')
             eRMSE_ts = np.convolve(eRMSE_ts, np.ones((smooth, )) / smooth, mode='same')
         c = cs[i]
-        ax.plot(eRMSE_ts, color=c, label=f'{expt} skill')
+        ax.plot(eRMSE_ts, color=c, label=f'{expt} error')
         ax.plot(dRMSE_ts, ls='--', color=c, label=f'{expt} spread')
-        # if show_skill_minus_spread:
-        #     ax.plot(eRMSE_ts - dRMSE_ts, ls=':', color=c, label=f'{expt} skill - spread')
+        # if show_error_minus_spread:
+        #     ax.plot(eRMSE_ts - dRMSE_ts, ls=':', color=c, label=f'{expt} error - spread')
         #     ax.axhline(y=0, ls='-', lw=0.5, color='k')
 
     times_half_days_hours = np.arange(0, ntime + 1, 12)
@@ -1183,23 +1259,23 @@ def plot_geopot_spread_skill_ts(expt_dRMSE, expt_eRMSE, smooth=False, xlim='full
     if smooth and xlim == 'full':
         ax.set_xlim((smooth, 240 - smooth))
     ax.relim()
-    # if not show_skill_minus_spread:
+    # if not show_error_minus_spread:
     #     ax.set_ylim((0, None))
 
     ax.legend(ncol=len(conf.EXPT_SIM))
     ax.set_xlabel('time (day)')
 
-class PlotGeopotSpreadSkill(Rule):
+class PlotGeopotSpreadError(Rule):
     rule_matrix = {
         'plot_kwargs': [
-            dict(smooth=False, show_skill_minus_spread=True),
+            dict(smooth=False, show_error_minus_spread=True),
             dict(smooth=24),
             dict(xlim=(0, 20)),
             dict(xlim=(0, 48)),
-            dict(smooth=False, show_skill_minus_spread=True, ens='full'),
-            dict(smooth=False, show_skill_minus_spread=True, ens='red'),
+            dict(smooth=False, show_error_minus_spread=True, ens='full'),
+            dict(smooth=False, show_error_minus_spread=True, ens='red'),
         ],
-        'case': conf.CASES[:1],
+        'case': conf.CASES,
         'domain': ['global', 'tropics'],
     }
 
@@ -1224,7 +1300,7 @@ class PlotGeopotSpreadSkill(Rule):
         kwstr = kwstr.replace(' ', '')
         return {
             'fig': (
-                conf.PATHS['figdir'] / 'N216sims' / case / 'geopot' / f'geopot_spread_skill.{case}.{domain}.{kwstr}.png'
+                conf.PATHS['figdir'] / 'N216sims' / case / 'geopot' / f'geopot_spread_error.{case}.{domain}.{kwstr}.png'
             ),
         }
 
@@ -1233,5 +1309,89 @@ class PlotGeopotSpreadSkill(Rule):
         print(case, plot_kwargs)
         expt_eRMSE = {expt: xr.load_dataarray(inputs[f'{expt}_eRMSE']) for expt in conf.EXPT_SIM}
         expt_dRMSE = {expt: xr.load_dataarray(inputs[f'{expt}_dRMSE']) for expt in conf.EXPT_SIM}
-        plot_geopot_spread_skill_ts(expt_dRMSE, expt_eRMSE, **plot_kwargs)
+        plot_geopot_spread_error_ts(expt_dRMSE, expt_eRMSE, **plot_kwargs)
+        plt.savefig(outputs['fig'])
+
+
+class PlotAllCasesGeopotSpreadError(Rule):
+    rule_matrix = {
+        'plot_kwargs': [
+            dict(smooth=False, show_error_minus_spread=True),
+            dict(smooth=24),
+            dict(xlim=(0, 20)),
+            dict(xlim=(0, 48)),
+            dict(smooth=False, show_error_minus_spread=True, ens='full'),
+            dict(smooth=False, show_error_minus_spread=True, ens='red'),
+        ],
+        'domain': ['global', 'tropics'],
+    }
+
+    @staticmethod
+    def rule_inputs(plot_kwargs, domain):
+        inputs = {
+            f'{case}_{expt}_eRMSE': Calc_geopot_eRMSE.rule_outputs(expt, case, domain)['eRMSE']
+            for expt in conf.EXPT_SIM
+            for case in conf.CASES
+        }
+        inputs.update({
+            f'{case}_{expt}_dRMSE': Calc_geopot_dRMSE.rule_outputs(expt, case, domain)['dRMSE']
+            for expt in conf.EXPT_SIM
+            for case in conf.CASES
+        })
+        return inputs
+
+    @staticmethod
+    def rule_outputs(plot_kwargs, domain):
+        kwstr = '-'.join(
+            f'{k}={v}'
+            for k, v in plot_kwargs.items()
+        )
+        kwstr = kwstr.replace(' ', '')
+        return {
+            'fig': (
+                conf.PATHS['figdir'] / 'N216sims' / 'all_cases' / 'geopot' / f'geopot_spread_error.all_cases.{domain}.{kwstr}.png'
+            ),
+        }
+
+    @staticmethod
+    def rule_run(inputs, outputs, plot_kwargs, domain):
+        print(plot_kwargs, domain)
+
+        # Give all datasets identical times so that they can be concatted along this dim.
+        times = np.arange(
+            np.datetime64('2020-01-01T04:00:00'),
+            np.datetime64('2020-01-11T04:00:00'),
+            np.timedelta64(1, 'h'),
+            dtype='datetime64[ns]'
+        )
+
+        # tricky_code
+        # Getting this right took a fair bit of iteration.
+        # Idea: load in all cases for each expt, and reset their times (to those of the first).
+        # Then concat along a new dim, case. If you don't reset their times, then the concat will
+        # not do what I want, because each time (different for each file) will be offset from all others.
+        # i.e. datasets will have 2880 values along time, instead of 288.
+        expt_eRMSE = {}
+        expt_dRMSE = {}
+        for expt in conf.EXPT_SIM:
+            case_expt_eRMSEs = []
+            case_expt_dRMSEs = []
+            for case in conf.CASES:
+                # TODO:
+                if '04' in case:
+                    # There is an issue with the data for April for u-dg135.
+                    # Skip for now.
+                    continue
+                case_expt_eRMSE = xr.load_dataarray(inputs[f'{case}_{expt}_eRMSE'])
+                case_expt_dRMSE = xr.load_dataarray(inputs[f'{case}_{expt}_dRMSE'])
+                case_expt_eRMSE.time.values[:] = times
+                case_expt_dRMSE.time.values[:] = times
+                case_expt_eRMSEs.append(case_expt_eRMSE)
+                case_expt_dRMSEs.append(case_expt_dRMSE)
+            expt_eRMSE[expt] = xr.concat(case_expt_eRMSEs, dim='case').mean(dim='case')
+            expt_dRMSE[expt] = xr.concat(case_expt_dRMSEs, dim='case').mean(dim='case')
+
+        # import IPython
+        # IPython.embed(colors='neutral')
+        plot_geopot_spread_error_ts(expt_dRMSE, expt_eRMSE, **plot_kwargs)
         plt.savefig(outputs['fig'])
