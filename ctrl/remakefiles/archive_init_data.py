@@ -6,12 +6,14 @@ archive = ArchiveV1(
     remakefile='N216_ens_analysis.py',
     author='Mark Muetzelfeldt',
     email='mark.muetzelfeldt@reading.ac.uk',
-    archive_loc='/gws/nopw/j04/mcs_prime/mmuetz/tmp',
+    archive_loc='/work/scratch-nopw2/mmuetz',
 )
 
 rules = [
     'GuassianFilterN216Imerg',
     'GuassianFilterExpt',
+    'PlotMCSPCallingFreq',
+    'PlotTCWV',
 ]
 for rule_name in rules:
     archive.add(
