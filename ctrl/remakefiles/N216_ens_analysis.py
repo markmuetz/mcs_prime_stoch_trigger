@@ -275,7 +275,7 @@ class PlotTotalPrecip(Rule):
 nens = 10
 aspect = 1.43  # mean aspect ratio of cells over the tropics.
 sel_tropics = {'latitude': slice(-30, 30)}
-sigmas = [0, 1, 2, 4]
+sigmas = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
 
 class GuassianFilterN216Imerg(Rule):
@@ -461,10 +461,23 @@ class Calc_dRMSE(Rule):
         utils.to_netcdf_tmp_then_copy(dRMSE, outputs['dRMSE'])
 
 
-plot_sigmas = [0, 2, 4]
+def plot_summary_spread_error_ts(expt_dRMSE, expt_eRMSE, ens='full'):
+    fig, ax = plt.subplots(1, 1, layout='constrained')
+    fig.set_size_inches(8, 6)
+    ntime = len(expt_eRMSE['ctrl'].time)
+
+    for i, expt in enumerate(conf.EXPT_SIM):
+        dRMSE = expt_dRMSE[expt]
+        if ens == 'red':
+            dRMSE = dRMSE.sel(realization1=slice(1, 10), realization2=slice(1, 10))
+            expt_eRMSE[expt] = expt_eRMSE[expt].sel(realization=slice(1, 10))
+        dRMSE_sigma = dRMSE.mean(dim=['realization1', 'realization2', 'time']).values
+        eRMSE_sigma = expt_eRMSE[expt].mean(dim=['realization', 'time']).values
+        ax.plot(dRMSE.sigma, dRMSE_sigma - eRMSE_sigma, label=f'{expt} spread - error')
 
 
 def plot_spread_error_ts(expt_dRMSE, expt_eRMSE, smooth=False, xlim='full', show_error_minus_spread=False, ens='full'):
+    plot_sigmas = [0, 2, 4]
     ntime = len(expt_eRMSE['ctrl'].time)
 
     fig, axes = plt.subplots(1, len(plot_sigmas), sharex=True, layout='constrained')
@@ -595,10 +608,14 @@ class PlotAllCasesSpreadError(Rule):
         kwstr = '-'.join(f'{k}={v}' for k, v in plot_kwargs.items())
         kwstr = kwstr.replace(' ', '')
         return {
-            'fig': conf.PATHS['figdir']
+            'fig': (conf.PATHS['figdir']
             / 'N216sims'
             / 'all_cases'
-            / f'spread_error.all_cases.{kwstr}.{regrid_method}.png'
+            / f'spread_error.all_cases.{kwstr}.{regrid_method}.png'),
+            'summary_fig': (conf.PATHS['figdir']
+            / 'N216sims'
+            / 'all_cases'
+            / f'spread_error.all_cases.ens={kwstr}.{regrid_method}.png'),
         }
 
     @staticmethod
@@ -637,6 +654,9 @@ class PlotAllCasesSpreadError(Rule):
             expt_dRMSE[expt] = xr.concat(case_expt_dRMSEs, dim='case').mean(dim='case')
         plot_spread_error_ts(expt_dRMSE, expt_eRMSE, **plot_kwargs)
         plt.savefig(outputs['fig'])
+
+        plot_summary_spread_error_ts(expt_dRMSE, expt_eRMSE, ens=plot_kwargs.get('ens', 'red'))
+        plt.savefig(outputs['summary_fig'])
 
 
 class CalcAutocorrImerg(Rule):
