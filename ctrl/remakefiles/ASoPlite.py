@@ -413,6 +413,7 @@ rmk = Remake({})
 REGIONS = {
     'eq_warm_pool': (60, 160, -10, 10),
     'eq_band': (0, 360, -10, 10),
+    'tropics': (0, 360, -30, 30),
     'indian_ocean': (50, 100, -10, 10),
     'india': (70, 90, 10, 30),
     'west_pacific': (110, 170, 5, 30),
@@ -447,24 +448,25 @@ class ASoPN216regional(Rule):
     def rule_outputs(expt, region, coarsen_time):
         return {'output': cu.PATHS['outdir'] / 'ASoP' / 'dev' / f'asop.{expt}.{region}.{coarsen_time}.nc'}
 
-    def rule_run(self):
-        reg_extent = REGIONS[self.region]
+    @staticmethod
+    def rule_run(inputs, outputs, expt, region, coarsen_time):
+        reg_extent = REGIONS[region]
         lat_lon_sel = dict(longitude=slice(reg_extent[0], reg_extent[1]), latitude=slice(reg_extent[2], reg_extent[3]))
 
-        if self.expt == 'imerg':
-            da_precip = xr.open_dataarray(self.inputs['precip']).sel(**lat_lon_sel)
+        if expt == 'imerg':
+            da_precip = xr.open_dataarray(inputs['precip']).sel(**lat_lon_sel)
         else:
-            da_precip = xr.open_dataarray(self.inputs['precip']).sel(ens_mem=1, **lat_lon_sel)
+            da_precip = xr.open_dataarray(inputs['precip']).sel(ens_mem=1, **lat_lon_sel)
             da_precip.values *= 3600
             da_precip.attrs['units'] = 'mm h-1'
 
-        if self.coarsen_time == '3-hourly':
+        if coarsen_time == '3-hourly':
             da_precip = da_precip.coarsen(time=3).mean()
         da_precip = da_precip.load()
 
-        asop = ASoPlite(da_precip, self.coarsen_time)
+        asop = ASoPlite(da_precip, coarsen_time)
         asop.calc_all()
-        cu.to_netcdf_tmp_then_copy(asop.ds, self.outputs['output'])
+        cu.to_netcdf_tmp_then_copy(asop.ds, outputs['output'])
 
 
 class PlotRegions(Rule):
@@ -477,7 +479,8 @@ class PlotRegions(Rule):
         fig_asop_dir = cu.PATHS['figdir'] / 'ASoP' / 'dev'
         return {'asop_regs': fig_asop_dir / f'asop.regions.png'}
 
-    def rule_run(self):
+    @staticmethod
+    def rule_run(inputs, outputs):
         fig, ax = plt.subplots(figsize=(12, 6), layout='constrained', subplot_kw={'projection': ccrs.PlateCarree()})
         ax.coastlines()
         gl = ax.gridlines(crs=ccrs.PlateCarree(), draw_labels=True, linewidth=1, color='gray')
@@ -510,7 +513,7 @@ class PlotRegions(Rule):
             ax.add_geometries([box], crs=ccrs.PlateCarree(), edgecolor=c, facecolor='none', lw=lw, zorder=zorder)
             custom_lines.append(Line2D([0], [0], color=c, lw=lw))
         ax.legend(custom_lines, REGIONS)
-        plt.savefig(self.outputs['asop_regs'])
+        plt.savefig(outputs['asop_regs'])
 
 
 class PlotASoPN216regional(Rule):
@@ -545,29 +548,30 @@ class PlotASoPN216regional(Rule):
             '7x7_spat_temp_corr': fig_asop_dir / f'asop.7x7_spat_temp_corr.{region}.{coarsen_time}.png',
         }
 
-    def rule_run(self):
-        reg_extent = REGIONS[self.region]
+    @staticmethod
+    def rule_run(inputs, outputs, region, coarsen_time):
+        reg_extent = REGIONS[region]
         lat_lon_sel = dict(longitude=slice(reg_extent[0], reg_extent[1]), latitude=slice(reg_extent[2], reg_extent[3]))
 
         asops = {}
         for expt in ['imerg', 'ctrl', 'vanillaMCSP', 'stochMCSP']:
             if expt == 'imerg':
-                da_precip = xr.open_dataarray(self.inputs[f'precip_{expt}']).sel(**lat_lon_sel)
+                da_precip = xr.open_dataarray(inputs[f'precip_{expt}']).sel(**lat_lon_sel)
             else:
-                da_precip = xr.open_dataarray(self.inputs[f'precip_{expt}']).sel(ens_mem=1, **lat_lon_sel)
+                da_precip = xr.open_dataarray(inputs[f'precip_{expt}']).sel(ens_mem=1, **lat_lon_sel)
                 da_precip.values *= 3600
                 da_precip.attrs['units'] = 'mm h-1'
 
-            if self.coarsen_time == '3-hourly':
+            if coarsen_time == '3-hourly':
                 da_precip = da_precip.coarsen(time=3).mean()
-            asops[expt] = ASoPlite(da_precip, self.coarsen_time)
-            asops[expt].load_ds(xr.open_dataset(self.inputs[f'asop_{expt}']))
+            asops[expt] = ASoPlite(da_precip, coarsen_time)
+            asops[expt].load_ds(xr.open_dataset(inputs[f'asop_{expt}']))
 
         fig, axes = plt.subplots(4, 4, layout='constrained', subplot_kw={'projection': ccrs.PlateCarree()})
         fig.set_size_inches(20, 6)
         for axcol, (expt, asop) in zip(axes.T, asops.items()):
             asop.plot_fractional_contrib(axes=axcol)
-        plt.savefig(self.outputs['fractional_contrib'])
+        plt.savefig(outputs['fractional_contrib'])
 
         fig, axes = plt.subplots(2, 2, layout='constrained')
         fig.set_size_inches(16, 12)
@@ -575,18 +579,18 @@ class PlotASoPN216regional(Rule):
             asop.plot_precip_prob_matrix(ax=ax)
             fig = plt.gcf()
             ax.set_title(expt)
-        plt.savefig(self.outputs['precip_prob_matrix'])
+        plt.savefig(outputs['precip_prob_matrix'])
 
         fig, axes = plt.subplots(2, 2)
         fig.set_size_inches(12, 8)
         for ax, (expt, asop) in zip(axes.flatten(), asops.items()):
             asop.plot_7x7_spat_corr(ax=ax)
             ax.set_title(expt)
-        plt.savefig(self.outputs['7x7_spat_corr'])
+        plt.savefig(outputs['7x7_spat_corr'])
 
         fig, axes = plt.subplots(2, 2)
         fig.set_size_inches(12, 8)
         for ax, (expt, asop) in zip(axes.flatten(), asops.items()):
             asop.plot_7x7_spat_temp_corr(ax=ax)
             ax.set_title(expt)
-        plt.savefig(self.outputs['7x7_spat_temp_corr'])
+        plt.savefig(outputs['7x7_spat_temp_corr'])
