@@ -217,7 +217,7 @@ class CalcTotalPrecip(Rule):
 
     rule_matrix = {
         ('case', 'regrid_method', 'ens', 'red_cf_expt'):
-        # list(product(conf.CASES, ['cons', 'non_cons'], ['full', 'red'], [False])) +
+        list(product(conf.CASES, ['cons', 'non_cons'], ['full', 'red'], [False])) +
         [('20200701T0000Z', 'cons', 'red', True)]
     }
 
@@ -261,7 +261,7 @@ class PlotTotalPrecip(Rule):
 
     rule_matrix = {
         ('case', 'regrid_method', 'ens', 'red_cf_expt'):
-        # list(product(conf.CASES, ['cons', 'non_cons'], ['full', 'red'], [False])) +
+        list(product(conf.CASES, ['cons', 'non_cons'], ['full', 'red'], [False])) +
         [('20200701T0000Z', 'cons', 'red', True)]
     }
 
