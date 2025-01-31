@@ -18,14 +18,7 @@ from remake import Remake, Rule
 
 import mcs_prime.mcs_prime_config_util as cu
 
-DATADIR = cu.PATHS['datadir']
-SIMDIR = DATADIR / 'UM_sims'
-
-EXPTS = {
-    'ctrl': 'u-di727',
-    'vanillaMCSP': 'u-di728',
-    'stochMCSP': 'u-dg135',
-}
+import proj_config as conf
 
 
 class ASoPlite:
@@ -425,12 +418,13 @@ REGIONS = {
 class ASoPN216regional(Rule):
     rule_matrix = {
         'expt': ['imerg', 'ctrl', 'vanillaMCSP', 'stochMCSP'],
+        'case': conf.CASES,
         'region': list(REGIONS),
         'coarsen_time': ['hourly', '3-hourly'],
     }
 
     @staticmethod
-    def rule_inputs(expt, region, coarsen_time):
+    def rule_inputs(expt, case, region, coarsen_time):
         if expt == 'imerg':
             inputs = {
                 'precip': (
@@ -440,23 +434,26 @@ class ASoPN216regional(Rule):
                 )
             }
         else:
-            suite = EXPTS[expt]
-            inputs = {'precip': SIMDIR / f'{suite}/processed/{expt}/engla_pa.precip.nc'}
+            suite = conf.EXPT_SIM[expt]
+            # inputs = {'precip': conf.SIMDIR / f'{suite}/processed/{expt}/{case}/engla_pa.precip.nc'}
+            # /gws/nopw/j04/mcs_prime/mmuetz/data/UM_sims/u-di727/share/cycle/20200101T0000Z/engl/um/
+            # englaa_pa.merged.20200101T0000Z.u-di727.m01s05i216.1h-mean.nc
+            inputs = {'precip': conf.SIMDIR / f'{suite}/share/cycle/{case}/engl/um/englaa_pa.merged.{case}.{suite}.m01s05i216.1h-mean.nc'}
         return inputs
 
     @staticmethod
-    def rule_outputs(expt, region, coarsen_time):
-        return {'output': cu.PATHS['outdir'] / 'ASoP' / 'dev' / f'asop.{expt}.{region}.{coarsen_time}.nc'}
+    def rule_outputs(expt, case, region, coarsen_time):
+        return {'output': cu.PATHS['outdir'] / 'ASoP' / expt / case / region / f'asop.{expt}.{case}.{region}.{coarsen_time}.nc'}
 
     @staticmethod
-    def rule_run(inputs, outputs, expt, region, coarsen_time):
+    def rule_run(inputs, outputs, expt, case, region, coarsen_time):
         reg_extent = REGIONS[region]
         lat_lon_sel = dict(longitude=slice(reg_extent[0], reg_extent[1]), latitude=slice(reg_extent[2], reg_extent[3]))
 
         if expt == 'imerg':
             da_precip = xr.open_dataarray(inputs['precip']).sel(**lat_lon_sel)
         else:
-            da_precip = xr.open_dataarray(inputs['precip']).sel(ens_mem=1, **lat_lon_sel)
+            da_precip = xr.open_dataset(inputs['precip']).precipitation_flux.sel(realization=1, **lat_lon_sel)
             da_precip.values *= 3600
             da_precip.attrs['units'] = 'mm h-1'
 
@@ -519,11 +516,12 @@ class PlotRegions(Rule):
 class PlotASoPN216regional(Rule):
     rule_matrix = {
         'region': list(REGIONS),
+        'case': conf.CASES,
         'coarsen_time': ['hourly', '3-hourly'],
     }
 
     @staticmethod
-    def rule_inputs(region, coarsen_time):
+    def rule_inputs(region, case, coarsen_time):
         inputs = {}
         for expt in ['imerg', 'ctrl', 'vanillaMCSP', 'stochMCSP']:
             if expt == 'imerg':
@@ -533,23 +531,27 @@ class PlotASoPN216regional(Rule):
                     / '3B-HHR.MS.MRG.3IMERG.2020-07-01_04:00:00-2020-07-11_03:00:00.hourly.V07B.nc'
                 )
             else:
-                suite = EXPTS[expt]
-                inputs[f'precip_{expt}'] = SIMDIR / f'{suite}/processed/{expt}/engla_pa.precip.nc'
-            inputs[f'asop_{expt}'] = ASoPN216regional.rule_outputs(expt, region, coarsen_time)['output']
+                suite = conf.EXPT_SIM[expt]
+                # inputs[f'precip_{expt}'] = conf.SIMDIR / f'{suite}/processed/{expt}/{case}/engla_pa.precip.nc'
+                # /gws/nopw/j04/mcs_prime/mmuetz/data/UM_sims/u-di727/share/cycle/20200101T0000Z/engl/um/
+                # englaa_pa.merged.20200101T0000Z.u-di727.m01s05i216.1h-mean.nc
+                inputs[f'precip_{expt}'] = conf.SIMDIR / f'{suite}/share/cycle/{case}/engl/um/englaa_pa.merged.{case}.{suite}.m01s05i216.1h-mean.nc'
+
+            inputs[f'asop_{expt}'] = ASoPN216regional.rule_outputs(expt, case, region, coarsen_time)['output']
         return inputs
 
     @staticmethod
-    def rule_outputs(region, coarsen_time):
+    def rule_outputs(region, case, coarsen_time):
         fig_asop_dir = cu.PATHS['figdir'] / 'ASoP' / 'dev'
         return {
-            'fractional_contrib': fig_asop_dir / f'asop.fractional_contrib.{region}.{coarsen_time}.png',
-            'precip_prob_matrix': fig_asop_dir / f'asop.precip_prob_matrix.{region}.{coarsen_time}.png',
-            '7x7_spat_corr': fig_asop_dir / f'asop.7x7_spat_corr.{region}.{coarsen_time}.png',
-            '7x7_spat_temp_corr': fig_asop_dir / f'asop.7x7_spat_temp_corr.{region}.{coarsen_time}.png',
+            'fractional_contrib': fig_asop_dir / case / region / f'asop.fractional_contrib.{region}.{case}.{coarsen_time}.png',
+            'precip_prob_matrix': fig_asop_dir / case / region / f'asop.precip_prob_matrix.{region}.{case}.{coarsen_time}.png',
+            '7x7_spat_corr': fig_asop_dir / case / region / f'asop.7x7_spat_corr.{region}.{case}.{coarsen_time}.png',
+            '7x7_spat_temp_corr': fig_asop_dir / case / region / f'asop.7x7_spat_temp_corr.{region}.{case}.{coarsen_time}.png',
         }
 
     @staticmethod
-    def rule_run(inputs, outputs, region, coarsen_time):
+    def rule_run(inputs, outputs, region, case, coarsen_time):
         reg_extent = REGIONS[region]
         lat_lon_sel = dict(longitude=slice(reg_extent[0], reg_extent[1]), latitude=slice(reg_extent[2], reg_extent[3]))
 
@@ -558,7 +560,7 @@ class PlotASoPN216regional(Rule):
             if expt == 'imerg':
                 da_precip = xr.open_dataarray(inputs[f'precip_{expt}']).sel(**lat_lon_sel)
             else:
-                da_precip = xr.open_dataarray(inputs[f'precip_{expt}']).sel(ens_mem=1, **lat_lon_sel)
+                da_precip = xr.open_dataset(inputs[f'precip_{expt}']).precipitation_flux.sel(realization=1, **lat_lon_sel)
                 da_precip.values *= 3600
                 da_precip.attrs['units'] = 'mm h-1'
 

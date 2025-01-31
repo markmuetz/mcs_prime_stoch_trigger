@@ -182,7 +182,7 @@ class RegridERA5ToN216(Rule):
 
 class CalcTotalPrecip(Rule):
     @staticmethod
-    def rule_inputs(case, regrid_method, ens):
+    def rule_inputs(case, regrid_method, ens, red_cf_expt):
         inputs = {}
         for expt in conf.EXPT_SIM:
             suite = conf.EXPT_SIM[expt]
@@ -190,39 +190,61 @@ class CalcTotalPrecip(Rule):
                 conf.SIMDIR / f'{suite}/share/cycle/{case}/engl/um/' f'englaa_pa.merged.{case}.{suite}.m01s05i216.nc'
             )
             # inputs[f'pflux_{expt}'] = conf.SIMDIR / f'{suite}/processed/{expt}/engla_pa.precip.nc'
+        if red_cf_expt:
+            suite = 'u-dj618'
+            inputs[f'pflux_red_cf'] = (
+                conf.SIMDIR / f'{suite}/share/cycle/{case}/engl/um/' f'englaa_pa.merged.{case}.{suite}.m01s05i216.nc'
+            )
         inputs['imerg'] = RegridImergToN216.rule_outputs(case, regrid_method)['output']
         return inputs
 
     @staticmethod
-    def rule_outputs(case, regrid_method, ens):
-        return {
-            'total_precip_data': conf.PATHS['outdir']
-            / 'N216sims'
-            / case
-            / f'total_precip.{case}.{regrid_method}.ens_{ens}.nc'
-        }
+    def rule_outputs(case, regrid_method, ens, red_cf_expt):
+        if red_cf_expt:
+            return {
+                'total_precip_data': conf.PATHS['outdir']
+                / 'N216sims'
+                / case
+                / f'total_precip.{case}.{regrid_method}.ens_{ens}.inc_red_cf.nc'
+            }
+        else:
+            return {
+                'total_precip_data': conf.PATHS['outdir']
+                / 'N216sims'
+                / case
+                / f'total_precip.{case}.{regrid_method}.ens_{ens}.nc'
+            }
 
     rule_matrix = {
-        'case': conf.CASES,
-        'regrid_method': ['cons', 'non_cons'],
-        'ens': ['full', 'red'],
+        ('case', 'regrid_method', 'ens', 'red_cf_expt'):
+        # list(product(conf.CASES, ['cons', 'non_cons'], ['full', 'red'], [False])) +
+        [('20200701T0000Z', 'cons', 'red', True)]
     }
 
     @staticmethod
-    def rule_run(inputs, outputs, case, regrid_method, ens):
+    def rule_run(inputs, outputs, case, regrid_method, ens, red_cf_expt):
         ds = xr.Dataset()
-        for expt in conf.EXPT_SIM:
+        if red_cf_expt:
+            expts = list(conf.EXPT_SIM) + ['red_cf']
+        else:
+            expts = conf.EXPT_SIM
+
+        imerg = xr.load_dataarray(inputs['imerg'])
+        ds['imerg_ts'] = imerg.mean(dim=['latitude', 'longitude'])
+        # IMERG data has a cftimeindex (julian), whereas pflux has a pandas datatimeindex.
+        # Convert OR all of the pflux data will be nans.
+        # This behaviour has changed - perhaps in an update to xarray?
+        ds['time'] = ds.indexes['time'].to_datetimeindex()
+
+        for expt in expts:
             print(expt)
             pflux = xr.load_dataset(inputs[f'pflux_{expt}']).precipitation_flux
             pflux.values *= 3600
             pflux.attrs['units'] = 'mm h-1'
             if ens == 'red':
                 pflux = pflux.isel(realization=slice(1, 10))
-                print(pflux)
+            print(pflux)
             ds[f'{expt}_ts'] = pflux.mean(dim=['realization', 'latitude', 'longitude'])
-
-        imerg = xr.load_dataarray(inputs['imerg'])
-        ds['imerg_ts'] = imerg.mean(dim=['latitude', 'longitude'])
 
         utils.to_netcdf_tmp_then_copy(ds, outputs['total_precip_data'])
 
@@ -231,25 +253,36 @@ class PlotTotalPrecip(Rule):
     rule_inputs = CalcTotalPrecip.rule_outputs
 
     @staticmethod
-    def rule_outputs(case, regrid_method, ens):
-        return {'fig': conf.PATHS['figdir'] / 'N216sims' / case / f'total_precip.{case}.{regrid_method}.ens_{ens}.png'}
+    def rule_outputs(case, regrid_method, ens, red_cf_expt):
+        if red_cf_expt:
+            return {'fig': conf.PATHS['figdir'] / 'N216sims' / case / f'total_precip.{case}.{regrid_method}.ens_{ens}.inc_red_cf.png'}
+        else:
+            return {'fig': conf.PATHS['figdir'] / 'N216sims' / case / f'total_precip.{case}.{regrid_method}.ens_{ens}.png'}
 
     rule_matrix = {
-        'case': conf.CASES,
-        'regrid_method': ['cons', 'non_cons'],
-        'ens': ['full', 'red'],
+        ('case', 'regrid_method', 'ens', 'red_cf_expt'):
+        # list(product(conf.CASES, ['cons', 'non_cons'], ['full', 'red'], [False])) +
+        [('20200701T0000Z', 'cons', 'red', True)]
     }
 
     @staticmethod
-    def rule_run(inputs, outputs, case, regrid_method, ens):
+    def rule_run(inputs, outputs, case, regrid_method, ens, red_cf_expt):
         ds = xr.load_dataset(inputs['total_precip_data'])
+        # print(ds)
         imerg_ts = ds['imerg_ts']
+        print(imerg_ts)
 
         fig, ax = plt.subplots()
         ax2 = ax.twinx()
         ax.plot(range(len(imerg_ts.time)), imerg_ts, c='k', label='IMERG')
-        for expt in conf.EXPT_SIM:
+        if red_cf_expt:
+            expts = list(conf.EXPT_SIM) + ['red_cf']
+        else:
+            expts = conf.EXPT_SIM
+
+        for expt in expts:
             pflux_ts = ds[f'{expt}_ts']
+            # print(pflux_ts)
             (l,) = ax.plot(range(len(pflux_ts.time)), pflux_ts, label=expt)
             ax2.plot(
                 range(len(pflux_ts.time)), pflux_ts.values / imerg_ts.values * 100, c=l.get_color(), ls='--', label=expt
@@ -473,7 +506,11 @@ def plot_summary_spread_error_ts(expt_dRMSE, expt_eRMSE, ens='full'):
             expt_eRMSE[expt] = expt_eRMSE[expt].sel(realization=slice(1, 10))
         dRMSE_sigma = dRMSE.mean(dim=['realization1', 'realization2', 'time']).values
         eRMSE_sigma = expt_eRMSE[expt].mean(dim=['realization', 'time']).values
-        ax.plot(dRMSE.sigma, dRMSE_sigma - eRMSE_sigma, label=f'{expt} spread - error')
+        ax.plot(dRMSE.sigma, dRMSE_sigma - eRMSE_sigma, label=f'{expt}')
+    ax.axhline(y=0, ls='--', color='k')
+    ax.set_xlabel('sigma')
+    ax.set_ylabel('spread - error (mm h$^{-1}$)')
+    ax.legend()
 
 
 def plot_spread_error_ts(expt_dRMSE, expt_eRMSE, smooth=False, xlim='full', show_error_minus_spread=False, ens='full'):
@@ -615,7 +652,7 @@ class PlotAllCasesSpreadError(Rule):
             'summary_fig': (conf.PATHS['figdir']
             / 'N216sims'
             / 'all_cases'
-            / f'spread_error.all_cases.ens={kwstr}.{regrid_method}.png'),
+            / f'spread_error.summary.all_cases.{kwstr}.{regrid_method}.png'),
         }
 
     @staticmethod
