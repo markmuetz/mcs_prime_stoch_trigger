@@ -19,7 +19,7 @@ import proj_config as conf
 
 # from N216_geopotential_processing import CalcERA5_500hPa_geopotential, PlotERA5_500hPa_geopotential
 
-slurm_config = {'account': 'short4hr', 'partition': 'short-serial-4hr', 'mem': 64000}
+slurm_config = {'account': 'mcs_prime', 'partition': 'standard', 'qos': 'standard', 'mem': 64000}
 rmk = Remake(config=dict(slurm=slurm_config, content_checks=False))
 
 expt_var = [
@@ -217,8 +217,10 @@ class CalcTotalPrecip(Rule):
 
     rule_matrix = {
         ('case', 'regrid_method', 'ens', 'red_cf_expt'):
-        list(product(conf.CASES, ['cons', 'non_cons'], ['full', 'red'], [False])) +
-        [('20200701T0000Z', 'cons', 'red', True)]
+        # TODO:
+        list(product(conf.CASES, ['cons', 'non_cons'], ['full', 'red'], [False]))
+        # list(product(conf.CASES, ['cons', 'non_cons'], ['full', 'red'], [False])) +
+        # [('20200701T0000Z', 'cons', 'red', True)]
     }
 
     @staticmethod
