@@ -59,7 +59,7 @@ class RegridImergToN216(Rule):
         }
         inputs['n216ds'] = (
             conf.SIMDIR
-            / 'u-dg135/share/cycle/20200701T0000Z/engl/um/englaa_pa.merged.20200701T0000Z.u-dg135.m01s05i216.nc'
+            / 'u-dg135/share/cycle/20200101T0000Z/engl/um/englaa_pa.merged.20200101T0000Z.u-dg135.m01s05i216.nc'
         )
 
         return inputs
@@ -130,7 +130,7 @@ class RegridERA5ToN216(Rule):
             }
         inputs['n216ds'] = (
             conf.SIMDIR
-            / 'u-dg135/share/cycle/20200701T0000Z/engl/um/englaa_pa.merged.20200701T0000Z.u-dg135.m01s05i216.nc'
+            / 'u-dg135/share/cycle/20200101T0000Z/engl/um/englaa_pa.merged.20200101T0000Z.u-dg135.m01s05i216.nc'
         )
 
         return inputs
@@ -263,8 +263,10 @@ class PlotTotalPrecip(Rule):
 
     rule_matrix = {
         ('case', 'regrid_method', 'ens', 'red_cf_expt'):
-        list(product(conf.CASES, ['cons', 'non_cons'], ['full', 'red'], [False])) +
-        [('20200701T0000Z', 'cons', 'red', True)]
+        # TODO:
+        list(product(conf.CASES, ['cons', 'non_cons'], ['full', 'red'], [False]))
+        # list(product(conf.CASES, ['cons', 'non_cons'], ['full', 'red'], [False])) +
+        # [('20200701T0000Z', 'cons', 'red', True)]
     }
 
     @staticmethod
@@ -998,6 +1000,7 @@ class CalcMCSPCallingFreqData(Rule):
 
     @staticmethod
     def rule_run(inputs, outputs, case):
+        print(inputs, outputs, case)
         expt_precip = {}
         expt_cf = {}
         for expt in ['vanillaMCSP', 'stochMCSP']:
