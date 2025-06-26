@@ -13,9 +13,9 @@ from timeit import default_timer as timer
 import pandas as pd
 import requests
 
-from remake2 import Remake, TaskRule
+from remake import Remake, Rule
 
-import config as conf
+import proj_config as conf
 
 DATADIR = conf.PATHS['datadir']
 IMERG_FINAL_30MIN_DIR = DATADIR / 'GPM_IMERG_final/30min'
@@ -117,36 +117,40 @@ def gen_dates_urls_filenames(filename_tpl, url_tpl, dates):
         curr_date = next_date
 
 
-class GpmImerg30MinDownload(TaskRule):
+class GpmImerg30MinDownload(Rule):
     rule_inputs = {}
 
     @staticmethod
-    def rule_outputs(date_range_kwargs):
+    def rule_outputs(idx):
+        date_range_kwargs = DATES_KWARGS[idx]
         dates = pd.date_range(**date_range_kwargs)
         s = dates[0]
         e = dates[-1]
         return {'output_filenames': str(IMERG_FINAL_30MIN_DIR / f'{s.year}' / f'download.{s}-{e}.done')}
 
-    var_matrix = {'date_range_kwargs': DATES_KWARGS}
+    # rule_matrix = {'date_range_kwargs': DATES_KWARGS}
+    rule_matrix = {'idx': range(len(DATES_KWARGS))}
 
-    def rule_run(self):
-        print(self.date_range_kwargs)
-        dates = pd.date_range(**self.date_range_kwargs)
+    @staticmethod
+    def rule_run(inputs, outputs, idx):
+        date_range_kwargs = DATES_KWARGS[idx]
+        print(date_range_kwargs)
+        dates = pd.date_range(**date_range_kwargs)
 
-        outputs = {}
+        actual_outputs = {}
         filename_tpl = FINAL_30MIN_FILENAME_TPL
         url_tpl = FINAL_30MIN_URL_TPL
         dates_urls_filenames = list(gen_dates_urls_filenames(filename_tpl, url_tpl, dates))
         all_filenames = []
         for i, (date, url, filename) in enumerate(dates_urls_filenames):
-            output_filename = self.outputs['output_filenames'].parent / f'{date.month:02d}/{date.day:02d}' / filename
+            output_filename = outputs['output_filenames'].parent / f'{date.month:02d}/{date.day:02d}' / filename
             output_filename.parent.mkdir(exist_ok=True, parents=True)
             # output_filename = Path(IMERG_FINAL_DIR / date.fmt_year() / filename)
             if not output_filename.exists():
-                outputs[url] = output_filename
+                actual_outputs[url] = output_filename
             all_filenames.append(str(output_filename))
 
-        for url, output_filename in outputs.items():
+        for url, output_filename in actual_outputs.items():
             print(url, output_filename)
             start = timer()
             tmp_filename = Path(output_filename.parent / ('.tmp.gpm_download.' + output_filename.name))
@@ -156,6 +160,6 @@ class GpmImerg30MinDownload(TaskRule):
             tmp_filename.rename(output_filename)
             print(f'-> downloaded in {(timer() - start):.2f}s')
         else:
-            print(f'No files to download for {self.date_range_kwargs}')
+            print(f'No files to download for {date_range_kwargs}')
 
-        self.outputs['output_filenames'].write_text('\n'.join(all_filenames) + '\n')
+        outputs['output_filenames'].write_text('\n'.join(all_filenames) + '\n')
