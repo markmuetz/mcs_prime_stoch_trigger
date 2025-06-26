@@ -26,7 +26,7 @@ CASES = [
     f'2020{m:02d}01T0000Z'
     # for m in range(1, 13)
     # TODO!:
-    for m in [1]
+    for m in [2]
 ]
 
 IMERG_FINAL_30MIN_DIR = DATADIR / 'GPM_IMERG_final/30min'
