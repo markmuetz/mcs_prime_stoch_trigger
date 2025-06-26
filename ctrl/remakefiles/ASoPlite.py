@@ -401,7 +401,8 @@ class ASoPlite:
         sns.heatmap(pd.DataFrame(spat_temp_corr2)[::-1], ax=ax, annot=True, norm=norm, cmap=cmap)
 
 
-rmk = Remake({})
+slurm_config = {'account': 'mcs_prime', 'partition': 'standard', 'qos': 'standard', 'mem': 64000}
+rmk = Remake(config=dict(slurm=slurm_config, content_checks=False))
 
 REGIONS = {
     'eq_warm_pool': (60, 160, -10, 10),
