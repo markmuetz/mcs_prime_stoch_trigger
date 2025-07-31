@@ -7,7 +7,6 @@ from matplotlib.ticker import FuncFormatter
 import matplotlib.ticker as mticker
 from matplotlib.lines import Line2D
 import numpy as np
-import matplotlib.pyplot as plt
 import pandas as pd
 import scipy.stats
 import seaborn as sns
@@ -398,10 +397,19 @@ class ASoPlite:
         for i in range(5):
             for j in range(1, 5):
                 spat_temp_corr2[i, j - 1] = self.ds.spat_temp_corr.values[i, :, :][d == j].mean()
-        sns.heatmap(pd.DataFrame(spat_temp_corr2)[::-1], ax=ax, annot=True, norm=norm, cmap=cmap)
+        # sns.heatmap(pd.DataFrame(spat_temp_corr2)[::-1], ax=ax, annot=True, norm=norm, cmap=cmap)
+        im = ax.imshow(spat_temp_corr2, origin='lower', cmap=cmap, norm=norm, aspect=1 / 1.3)
+        ax.set_xticks(range(4))
+        ax.set_yticks(range(5))
+        for i in range(5):
+            for j in range(4):
+                val = spat_temp_corr2[i, j]
+                text = f'{val:.2f}'
+                c = 'k' if val <= 0.35 else 'white'
+                ax.text(j, i, text, ha='center', va='center', color=c)
+        return im
 
-
-slurm_config = {'account': 'mcs_prime', 'partition': 'standard', 'qos': 'standard', 'mem': 64000}
+slurm_config = {'account': 'mcs_prime', 'partition': 'standard', 'qos': 'standard', 'mem': 16000}
 rmk = Remake(config=dict(slurm=slurm_config, content_checks=False))
 
 REGIONS = {
@@ -591,9 +599,17 @@ class PlotASoPN216regional(Rule):
             ax.set_title(expt)
         plt.savefig(outputs['7x7_spat_corr'])
 
-        fig, axes = plt.subplots(2, 2)
-        fig.set_size_inches(12, 8)
+        fig, axes = plt.subplots(2, 2, sharex=True, sharey=True, layout='constrained')
+        fig.set_size_inches(10, 8)
         for ax, (expt, asop) in zip(axes.flatten(), asops.items()):
-            asop.plot_7x7_spat_temp_corr(ax=ax)
+            im = asop.plot_7x7_spat_temp_corr(ax=ax)
             ax.set_title(expt)
+        plt.colorbar(im, ax=axes, orientation='vertical', label='Corr. with centre at lag=0')
+        for ax in axes[:, 0]:
+            if coarsen_time == '3-hourly':
+                ax.set_ylabel('Lag (3 hourly)')
+            else:
+                ax.set_ylabel('Lag (hourly)')
+        for ax in axes[-1, :]:
+            ax.set_xlabel('$\\Delta x$ (approx. 75 km at equator)')
         plt.savefig(outputs['7x7_spat_temp_corr'])
