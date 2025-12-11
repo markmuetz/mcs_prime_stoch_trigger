@@ -1,16 +1,16 @@
-import pandas as pd
 from itertools import product
+import string
 
 import cartopy.crs as ccrs
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import scipy.ndimage as ndimage
 import numpy as np
+import pandas as pd
 import scipy.stats
 import xarray as xr
 import xesmf as xe
 
-from remake.util import sysrun
 import utils
 
 from remake import Remake, Rule
@@ -187,13 +187,13 @@ class CalcTotalPrecip(Rule):
         for expt in conf.EXPT_SIM:
             suite = conf.EXPT_SIM[expt]
             inputs[f'pflux_{expt}'] = (
-                conf.SIMDIR / f'{suite}/share/cycle/{case}/engl/um/' f'englaa_pa.merged.{case}.{suite}.m01s05i216.nc'
+                    conf.SIMDIR / f'{suite}/share/cycle/{case}/engl/um/englaa_pa.merged.{case}.{suite}.m01s05i216.nc'
             )
             # inputs[f'pflux_{expt}'] = conf.SIMDIR / f'{suite}/processed/{expt}/engla_pa.precip.nc'
         if red_cf_expt:
             suite = 'u-dj618'
             inputs[f'pflux_red_cf'] = (
-                conf.SIMDIR / f'{suite}/share/cycle/{case}/engl/um/' f'englaa_pa.merged.{case}.{suite}.m01s05i216.nc'
+                    conf.SIMDIR / f'{suite}/share/cycle/{case}/engl/um/englaa_pa.merged.{case}.{suite}.m01s05i216.nc'
             )
         inputs['imerg'] = RegridImergToN216.rule_outputs(case, regrid_method)['output']
         return inputs
@@ -203,22 +203,22 @@ class CalcTotalPrecip(Rule):
         if red_cf_expt:
             return {
                 'total_precip_data': conf.PATHS['outdir']
-                / 'N216sims'
-                / case
-                / f'total_precip.{case}.{regrid_method}.ens_{ens}.inc_red_cf.nc'
+                                     / 'N216sims'
+                                     / case
+                                     / f'total_precip.{case}.{regrid_method}.ens_{ens}.inc_red_cf.nc'
             }
         else:
             return {
                 'total_precip_data': conf.PATHS['outdir']
-                / 'N216sims'
-                / case
-                / f'total_precip.{case}.{regrid_method}.ens_{ens}.nc'
+                                     / 'N216sims'
+                                     / case
+                                     / f'total_precip.{case}.{regrid_method}.ens_{ens}.nc'
             }
 
     rule_matrix = {
         ('case', 'regrid_method', 'ens', 'red_cf_expt'):
         # TODO:
-        list(product(conf.CASES, ['cons', 'non_cons'], ['full', 'red'], [False]))
+            list(product(conf.CASES, ['cons', 'non_cons'], ['full', 'red'], [False]))
         # list(product(conf.CASES, ['cons', 'non_cons'], ['full', 'red'], [False])) +
         # [('20200701T0000Z', 'cons', 'red', True)]
     }
@@ -249,6 +249,149 @@ class CalcTotalPrecip(Rule):
             ds[f'{expt}_ts'] = pflux.mean(dim=['realization', 'latitude', 'longitude'])
 
         utils.to_netcdf_tmp_then_copy(ds, outputs['total_precip_data'])
+
+
+class PlotPrecipSnapshots(Rule):
+    @staticmethod
+    def rule_inputs(case, regrid_method, ens, red_cf_expt):
+        inputs = {}
+        for expt in conf.EXPT_SIM:
+            suite = conf.EXPT_SIM[expt]
+            inputs[f'pflux_{expt}'] = (
+                conf.SIMDIR / f'{suite}/share/cycle/{case}/engl/um/englaa_pa.merged.{case}.{suite}.m01s05i216.nc'
+            )
+            # inputs[f'pflux_{expt}'] = conf.SIMDIR / f'{suite}/processed/{expt}/engla_pa.precip.nc'
+        if red_cf_expt:
+            suite = 'u-dj618'
+            inputs[f'pflux_red_cf'] = (
+                conf.SIMDIR / f'{suite}/share/cycle/{case}/engl/um/englaa_pa.merged.{case}.{suite}.m01s05i216.nc'
+            )
+        inputs['imerg'] = RegridImergToN216.rule_outputs(case, regrid_method)['output']
+        return inputs
+
+    @staticmethod
+    def rule_outputs(case, regrid_method, ens, red_cf_expt):
+        if red_cf_expt:
+            return {
+                'dummy': conf.PATHS['figdir']
+                / 'N216sims'
+                / case
+                / f'precip_snapshot/precip_snapshot.{case}.{regrid_method}.ens_{ens}.inc_red_cf.dummy'
+            }
+        else:
+            return {
+                'dummy': conf.PATHS['figdir']
+                / 'N216sims'
+                / case
+                / f'precip_snapshot/precip_snapshot.{case}.{regrid_method}.ens_{ens}.dummy'
+            }
+
+    rule_matrix = {
+        ('case', 'regrid_method', 'ens', 'red_cf_expt'):
+        # TODO:
+        list(product(conf.CASES, ['cons'], ['red'], [False]))
+        # list(product(conf.CASES, ['cons', 'non_cons'], ['full', 'red'], [False])) +
+        # [('20200701T0000Z', 'cons', 'red', True)]
+    }
+
+    @staticmethod
+    def rule_run(inputs, outputs, case, regrid_method, ens, red_cf_expt):
+        figdir = outputs['dummy'].parent
+
+        if red_cf_expt:
+            expts = list(conf.EXPT_SIM) + ['red_cf']
+        else:
+            expts = conf.EXPT_SIM
+
+        imerg = xr.load_dataarray(inputs['imerg'])
+        # ds['imerg'] = imerg
+        # IMERG data has a cftimeindex (julian), whereas pflux has a pandas datatimeindex.
+        # Convert OR all of the pflux data will be nans.
+        # This behaviour has changed - perhaps in an update to xarray?
+        # ds['time'] = ds.indexes['time'].to_datetimeindex()
+        ds = xr.Dataset()
+
+        for expt in expts:
+            print(expt)
+            pflux = xr.load_dataset(inputs[f'pflux_{expt}']).precipitation_flux
+            pflux.values *= 3600
+            pflux.attrs['units'] = 'mm h-1'
+            if ens == 'red':
+                pflux = pflux.isel(realization=slice(1, 10))
+            print(pflux)
+            ds[f'{expt}'] = pflux.isel(realization=1)
+
+        cmap = plt.get_cmap('viridis').copy()
+        cmap.set_under('white')
+        # Define regions with their boundaries and colors
+        regions = {
+            'maritime_continent': {'xlim': (90, 170), 'ylim': (-15, 25), 'color': 'red'},
+            'indian_ocean': {'xlim': (40, 100), 'ylim': (-25, 5), 'color': 'blue'},
+            'central_africa': {'xlim': (-10, 50), 'ylim': (-20, 10), 'color': 'green'},
+            'south_america': {'xlim': (-90, -30), 'ylim': (-15, 15), 'color': 'purple'},
+        }
+
+        for i in range(len(ds.time)):
+            jt = imerg.isel(time=i).time.item() # Julian time for some reason -- but should be Gregorian.
+            imerg_time = pd.Timestamp(
+                year=jt.year,
+                month=jt.month,
+                day=jt.day,
+                hour=jt.hour,
+            )
+            assert imerg_time == pd.Timestamp(ds.isel(time=i).time.item()), 'Times do not match!'
+            print(i, imerg_time)
+
+            # Plot regions on global view first
+            global_fig, global_axes = plt.subplots(2, 2, figsize=(12, 6), subplot_kw={'projection': ccrs.PlateCarree()},
+                                                   layout='constrained')
+            global_fig.suptitle(f'{imerg_time:%Y-%m-%d %H:%M}Z')
+
+            boundaries = [0.25, 0.5, 1, 2, 4, 8, 16, 32, 64]
+            norm = mpl.colors.BoundaryNorm(boundaries, ncolors=256)
+            rects = []
+            for j, da, ax, name in zip(range(4), [imerg] + [ds[e] for e in expts], global_axes.flat,
+                                       ['IMERG'] + list(expts)):
+                c = string.ascii_lowercase[j]
+                im = ax.pcolormesh(da.longitude, da.latitude, da.isel(time=i), norm=norm, cmap=cmap)
+                ax.coastlines()
+                ax.set_title(f'{c}) {name}', loc='left')
+                # Draw region boxes
+                for region_name, region in regions.items():
+                    rect = plt.Rectangle(
+                        (region['xlim'][0], region['ylim'][0]),
+                        region['xlim'][1] - region['xlim'][0],
+                        region['ylim'][1] - region['ylim'][0],
+                        facecolor='none',
+                        edgecolor=region['color'],
+                        linewidth=1,
+                        label=region_name if j == 0 else ''
+                    )
+                    ax.add_patch(rect)
+                    rects.append(rect)
+                # if j == 0:
+                #     ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+            cbar = plt.colorbar(im, ax=global_axes, label='precip. [mm h$^{-1}$]', extend='max', ticks=boundaries)
+            cbar.set_ticklabels([str(v) for v in boundaries])
+
+            plt.savefig(figdir / f'precip_snapshot.global.t{i:03d}.png')
+
+            # Remove bounding boxes before plotting regions.
+            for rect in rects:
+                rect.remove()
+
+            # Then plot individual regions
+            for region_name, region in regions.items():
+                region_mid_lon = (region['xlim'][1] + region['xlim'][0]) / 2
+                lst_time = imerg_time + pd.Timedelta(hours=region_mid_lon / 180 * 12)
+                global_fig.suptitle(f'{imerg_time:%Y-%m-%d %H:%M}Z, {lst_time:%Y-%m-%d %H:%M} LST')
+                for ax in global_axes.flat:
+                    ax.set_xlim(*region['xlim'])
+                    ax.set_ylim(*region['ylim'])
+                plt.savefig(figdir / f'precip_snapshot.{region_name}.t{i:03d}.png')
+            plt.close('all')
+
+        outputs['dummy'].write_text('done')
 
 
 class PlotTotalPrecip(Rule):
@@ -362,7 +505,7 @@ class GuassianFilterExpt(Rule):
         suite = conf.EXPT_SIM[expt]
         inputs = {
             'pflux': (
-                conf.SIMDIR / f'{suite}/share/cycle/{case}/engl/um/' f'englaa_pa.merged.{case}.{suite}.m01s05i216.nc'
+                conf.SIMDIR / f'{suite}/share/cycle/{case}/engl/um/englaa_pa.merged.{case}.{suite}.m01s05i216.nc'
             )
         }
         return inputs
@@ -750,7 +893,7 @@ class CalcAutocorrExpt(Rule):
         suite = conf.EXPT_SIM[expt]
         inputs = {
             'pflux': (
-                conf.SIMDIR / f'{suite}/share/cycle/{case}/engl/um/' f'englaa_pa.merged.{case}.{suite}.m01s05i216.nc'
+                conf.SIMDIR / f'{suite}/share/cycle/{case}/engl/um/englaa_pa.merged.{case}.{suite}.m01s05i216.nc'
             )
         }
         return inputs
