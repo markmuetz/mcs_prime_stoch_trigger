@@ -439,7 +439,7 @@ class ASoPN216regional(Rule):
                 'precip': (
                     cu.PATHS['outdir']
                     / 'imerg_processed/N216grid/2020-07-01_04:00:00-2020-07-11_03:00:00/'
-                    / '3B-HHR.MS.MRG.3IMERG.2020-07-01_04:00:00-2020-07-11_03:00:00.hourly.V07B.nc'
+                    / 'N216.cons.3B-HHR.MS.MRG.3IMERG.2020-07-01_04:00:00-2020-07-11_03:00:00.hourly.V07B.nc'
                 )
             }
         else:
@@ -532,12 +532,13 @@ class PlotASoPN216regional(Rule):
     @staticmethod
     def rule_inputs(region, case, coarsen_time):
         inputs = {}
+        month = case[4:6]
         for expt in ['imerg', 'ctrl', 'vanillaMCSP', 'stochMCSP']:
             if expt == 'imerg':
                 inputs[f'precip_{expt}'] = (
                     cu.PATHS['outdir']
-                    / 'imerg_processed/N216grid/2020-07-01_04:00:00-2020-07-11_03:00:00/'
-                    / '3B-HHR.MS.MRG.3IMERG.2020-07-01_04:00:00-2020-07-11_03:00:00.hourly.V07B.nc'
+                    / f'imerg_processed/N216grid/2020-{month}-01_04:00:00-2020-{month}-11_03:00:00/'
+                    / f'N216.cons.3B-HHR.MS.MRG.3IMERG.2020-{month}-01_04:00:00-2020-{month}-11_03:00:00.hourly.V07B.nc'
                 )
             else:
                 suite = conf.EXPT_SIM[expt]
