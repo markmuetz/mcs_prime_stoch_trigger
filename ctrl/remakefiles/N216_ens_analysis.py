@@ -71,6 +71,10 @@ settings = Settings()
 
 class RegridImergToN216(Rule):
     """Regrid IMERG to the same grid as N216 simulations."""
+    rule_matrix = {
+        'case': conf.CASES,
+        'regrid_method': settings.regrid_method,
+    }
 
     @staticmethod
     def rule_inputs(case, regrid_method):
@@ -112,11 +116,6 @@ class RegridImergToN216(Rule):
         }
         return outputs
 
-    rule_matrix = {
-        'case': conf.CASES,
-        'regrid_method': settings.regrid_method,
-    }
-
     @staticmethod
     def rule_run(inputs, outputs, case, regrid_method):
         # MUST be a dataset to add bounds correctly. Bounds needed for conservative regrid.
@@ -139,6 +138,10 @@ class RegridImergToN216(Rule):
 
 class RegridERA5ToN216(Rule):
     """Regrid ERA5 to the same grid as N216 simulations."""
+    rule_matrix = {
+        'case': conf.CASES,
+        'var': ['tcwv', 'z'],
+    }
 
     @staticmethod
     def rule_inputs(case, var):
@@ -188,11 +191,6 @@ class RegridERA5ToN216(Rule):
             }
         return outputs
 
-    rule_matrix = {
-        'case': conf.CASES,
-        'var': ['tcwv', 'z'],
-    }
-
     @staticmethod
     def rule_run(inputs, outputs, case, var):
         # MUST be a dataset to add bounds correctly. Bounds needed for conservative regrid.
@@ -211,6 +209,12 @@ class RegridERA5ToN216(Rule):
 
 class PlotPrecipSnapshots(Rule):
     """Plot precipitation snapshots for the different expts."""
+    rule_matrix = {
+        ('case', 'regrid_method', 'ens', 'red_cf_expt'):
+            list(product(conf.CASES, settings.regrid_method, settings.ens, [False])) +
+            [('20200701T0000Z', 'cons', 'red', True)]
+    }
+
     @staticmethod
     def rule_inputs(case, regrid_method, ens, red_cf_expt):
         inputs = {}
@@ -232,23 +236,17 @@ class PlotPrecipSnapshots(Rule):
         if red_cf_expt:
             return {
                 'dummy': conf.PATHS['figdir']
-                / 'N216sims'
+                / 'ensemble'
                 / case
                 / f'precip_snapshot/precip_snapshot.{case}.{regrid_method}.ens_{ens}.inc_red_cf.dummy'
             }
         else:
             return {
                 'dummy': conf.PATHS['figdir']
-                / 'N216sims'
+                / 'ensemble'
                 / case
                 / f'precip_snapshot/precip_snapshot.{case}.{regrid_method}.ens_{ens}.dummy'
             }
-
-    rule_matrix = {
-        ('case', 'regrid_method', 'ens', 'red_cf_expt'):
-            list(product(conf.CASES, settings.regrid_method, settings.ens, [False])) +
-            [('20200701T0000Z', 'cons', 'red', True)]
-    }
 
     @staticmethod
     def rule_run(inputs, outputs, case, regrid_method, ens, red_cf_expt):
@@ -351,6 +349,12 @@ class PlotPrecipSnapshots(Rule):
 
 class CalcTotalPrecip(Rule):
     """Calculate the total precip (no latitude area weighting)."""
+    rule_matrix = {
+        ('case', 'regrid_method', 'ens', 'red_cf_expt'):
+            list(product(conf.CASES, settings.regrid_method, settings.ens, [False])) +
+            [('20200701T0000Z', 'cons', 'red', True)]
+    }
+
     @staticmethod
     def rule_inputs(case, regrid_method, ens, red_cf_expt):
         inputs = {}
@@ -372,23 +376,17 @@ class CalcTotalPrecip(Rule):
         if red_cf_expt:
             return {
                 'total_precip_data': conf.PATHS['outdir']
-                                     / 'N216sims'
+                                     / 'ensemble'
                                      / case
                                      / f'total_precip.{case}.{regrid_method}.ens_{ens}.inc_red_cf.nc'
             }
         else:
             return {
                 'total_precip_data': conf.PATHS['outdir']
-                                     / 'N216sims'
+                                     / 'ensemble'
                                      / case
                                      / f'total_precip.{case}.{regrid_method}.ens_{ens}.nc'
             }
-
-    rule_matrix = {
-        ('case', 'regrid_method', 'ens', 'red_cf_expt'):
-            list(product(conf.CASES, settings.regrid_method, settings.ens, [False])) +
-            [('20200701T0000Z', 'cons', 'red', True)]
-    }
 
     @staticmethod
     def rule_run(inputs, outputs, case, regrid_method, ens, red_cf_expt):
@@ -420,20 +418,20 @@ class CalcTotalPrecip(Rule):
 
 class PlotTotalPrecip(Rule):
     """Plot the total precip produced by CalcTotalPrecip (not lat area weighted)"""
-    rule_inputs = CalcTotalPrecip.rule_outputs
-
-    @staticmethod
-    def rule_outputs(case, regrid_method, ens, red_cf_expt):
-        if red_cf_expt:
-            return {'fig': conf.PATHS['figdir'] / 'N216sims' / case / f'total_precip.{case}.{regrid_method}.ens_{ens}.inc_red_cf.png'}
-        else:
-            return {'fig': conf.PATHS['figdir'] / 'N216sims' / case / f'total_precip.{case}.{regrid_method}.ens_{ens}.png'}
-
     rule_matrix = {
         ('case', 'regrid_method', 'ens', 'red_cf_expt'):
             list(product(conf.CASES, settings.regrid_method, settings.ens, [False])) +
             [('20200701T0000Z', 'cons', 'red', True)]
     }
+
+    rule_inputs = CalcTotalPrecip.rule_outputs
+
+    @staticmethod
+    def rule_outputs(case, regrid_method, ens, red_cf_expt):
+        if red_cf_expt:
+            return {'fig': conf.PATHS['figdir'] / 'ensemble' / case / f'total_precip.{case}.{regrid_method}.ens_{ens}.inc_red_cf.png'}
+        else:
+            return {'fig': conf.PATHS['figdir'] / 'ensemble' / case / f'total_precip.{case}.{regrid_method}.ens_{ens}.png'}
 
     @staticmethod
     def rule_run(inputs, outputs, case, regrid_method, ens, red_cf_expt):
@@ -479,6 +477,11 @@ class GuassianFilterN216Imerg(Rule):
     """Apply a Guassian filter to the N216 IMERG data.
 
     Do this once for each sigma value -- equivalent to 1 delta-x in the zonal dir at the tropics."""
+    rule_matrix = {
+        'case': conf.CASES,
+        'regrid_method': settings.regrid_method,
+    }
+
     @staticmethod
     def rule_inputs(case, regrid_method):
         inputs = {'imerg': RegridImergToN216.rule_outputs(case, regrid_method)['output']}
@@ -497,11 +500,6 @@ class GuassianFilterN216Imerg(Rule):
             )
         }
         return outputs
-
-    rule_matrix = {
-        'case': conf.CASES,
-        'regrid_method': settings.regrid_method,
-    }
 
     @staticmethod
     def rule_run(inputs, outputs, case, regrid_method):
@@ -523,6 +521,11 @@ class GuassianFilterExpt(Rule):
     """Apply a Guassian filter to the N216 experiments.
 
     Do this once for each sigma value -- equivalent to 1 delta-x in the zonal dir at the tropics."""
+    rule_matrix = {
+        'expt': list(conf.EXPT_SIM.keys()),
+        'case': conf.CASES,
+    }
+
     @staticmethod
     def rule_inputs(expt, case):
         suite = conf.EXPT_SIM[expt]
@@ -538,11 +541,6 @@ class GuassianFilterExpt(Rule):
         suite = conf.EXPT_SIM[expt]
         outputs = {'pflux_filtered': conf.SIMDIR / f'{suite}/processed/{expt}/{case}/engla_pa.filtered_precip.nc'}
         return outputs
-
-    rule_matrix = {
-        'expt': list(conf.EXPT_SIM.keys()),
-        'case': conf.CASES,
-    }
 
     @staticmethod
     def rule_run(inputs, outputs, expt, case):
@@ -574,6 +572,12 @@ class Calc_eRMSE(Rule):
     """Calc Ensemble RMSE - this is a measure of the error averaged over the ensemble.
 
      See here for the inspiration: https://doi.org/10.1175/MWR-D-14-00172.1 (using FSS instead of RMSE)."""
+    rule_matrix = {
+        'expt': list(conf.EXPT_SIM.keys()),
+        'case': conf.CASES,
+        'regrid_method': settings.regrid_method,
+    }
+
     @staticmethod
     def rule_inputs(expt, case, regrid_method):
         inputs = {
@@ -589,12 +593,6 @@ class Calc_eRMSE(Rule):
             'eRMSE': conf.SIMDIR / f'{suite}/processed/{expt}/{case}/engla_pa.filtered_precip.eRMSE.{regrid_method}.nc'
         }
         return outputs
-
-    rule_matrix = {
-        'expt': list(conf.EXPT_SIM.keys()),
-        'case': conf.CASES,
-        'regrid_method': settings.regrid_method,
-    }
 
     @staticmethod
     def rule_run(inputs, outputs, expt, case, regrid_method):
@@ -626,6 +624,11 @@ class Calc_dRMSE(Rule):
     """Calc Dispersion RMSE - this is a measure of the dispersion of the ensemble.
 
      See here for the inspiration: https://doi.org/10.1175/MWR-D-14-00172.1 (using FSS instead of RMSE)."""
+    rule_matrix = {
+        'expt': list(conf.EXPT_SIM.keys()),
+        'case': conf.CASES,
+    }
+
     @staticmethod
     def rule_inputs(expt, case):
         inputs = {
@@ -638,11 +641,6 @@ class Calc_dRMSE(Rule):
         suite = conf.EXPT_SIM[expt]
         outputs = {'dRMSE': conf.SIMDIR / f'{suite}/processed/{expt}/{case}/engla_pa.filtered_precip.dRMSE.nc'}
         return outputs
-
-    rule_matrix = {
-        'expt': list(conf.EXPT_SIM.keys()),
-        'case': conf.CASES,
-    }
 
     @staticmethod
     def rule_run(inputs, outputs, expt, case):
@@ -750,6 +748,18 @@ class PlotSpreadError(Rule):
     spread: eRMSE
     error: dRMSE
     """
+    rule_matrix = {
+        'plot_kwargs': [
+            dict(smooth=False, show_error_minus_spread=True),
+            dict(smooth=24),
+            dict(xlim=(0, 20)),
+            dict(xlim=(0, 48)),
+            dict(smooth=False, show_error_minus_spread=True, ens='red'),
+        ],
+        'case': conf.CASES,
+        'regrid_method': settings.regrid_method,
+    }
+
     @staticmethod
     def rule_inputs(plot_kwargs, case, regrid_method):
         inputs = {
@@ -762,19 +772,7 @@ class PlotSpreadError(Rule):
     def rule_outputs(plot_kwargs, case, regrid_method):
         kwstr = '-'.join(f'{k}={v}' for k, v in plot_kwargs.items())
         kwstr = kwstr.replace(' ', '')
-        return {'fig': conf.PATHS['figdir'] / 'N216sims' / case / f'spread_error.{case}.{kwstr}.{regrid_method}.png'}
-
-    rule_matrix = {
-        'plot_kwargs': [
-            dict(smooth=False, show_error_minus_spread=True),
-            dict(smooth=24),
-            dict(xlim=(0, 20)),
-            dict(xlim=(0, 48)),
-            dict(smooth=False, show_error_minus_spread=True, ens='red'),
-        ],
-        'case': conf.CASES,
-        'regrid_method': settings.regrid_method,
-    }
+        return {'fig': conf.PATHS['figdir'] / 'ensemble' / case / f'spread_error.{case}.{kwstr}.{regrid_method}.png'}
 
     @staticmethod
     def rule_run(inputs, outputs, plot_kwargs, case, regrid_method):
@@ -827,11 +825,11 @@ class PlotAllCasesSpreadError(Rule):
         kwstr = kwstr.replace(' ', '')
         return {
             'fig': (conf.PATHS['figdir']
-            / 'N216sims'
+            / 'ensemble'
             / 'all_cases'
             / f'spread_error.all_cases.{kwstr}.{regrid_method}.png'),
             'summary_fig': (conf.PATHS['figdir']
-            / 'N216sims'
+            / 'ensemble'
             / 'all_cases'
             / f'spread_error.summary.all_cases.{kwstr}.{regrid_method}.png'),
         }
@@ -877,6 +875,8 @@ class PlotAllCasesSpreadError(Rule):
 
 class CalcAutocorrImerg(Rule):
     """Calculates the one-timestep auto correlation for IMERG"""
+    rule_matrix = {'case': conf.CASES}
+
     @staticmethod
     def rule_inputs(case):
         inputs = {'imerg': RegridImergToN216.rule_outputs(case, 'cons')['output']}
@@ -895,8 +895,6 @@ class CalcAutocorrImerg(Rule):
             )
         }
         return outputs
-
-    rule_matrix = {'case': conf.CASES}
 
     @staticmethod
     def rule_run(inputs, outputs, case):
@@ -920,6 +918,11 @@ class CalcAutocorrImerg(Rule):
 
 class CalcAutocorrExpt(Rule):
     """Calculates the one-timestep auto correlation for each expt."""
+    rule_matrix = {
+        'expt': list(conf.EXPT_SIM.keys()),
+        'case': conf.CASES,
+    }
+
     @staticmethod
     def rule_inputs(expt, case):
         suite = conf.EXPT_SIM[expt]
@@ -935,11 +938,6 @@ class CalcAutocorrExpt(Rule):
         suite = conf.EXPT_SIM[expt]
         outputs = {'pflux_autocorr': conf.SIMDIR / f'{suite}/processed/{expt}/{case}/engla_pa.autocorr_precip.nc'}
         return outputs
-
-    rule_matrix = {
-        'expt': list(conf.EXPT_SIM.keys()),
-        'case': conf.CASES,
-    }
 
     @staticmethod
     def rule_run(inputs, outputs, expt, case):
@@ -966,6 +964,10 @@ class CalcAutocorrExpt(Rule):
 
 class PlotAutocorr(Rule):
     """Plots the one-timestep auto correlation for IMERG/each expt."""
+    rule_matrix = {
+        'case': conf.CASES,
+    }
+
     @staticmethod
     def rule_inputs(case):
         inputs = {}
@@ -976,11 +978,7 @@ class PlotAutocorr(Rule):
 
     @staticmethod
     def rule_outputs(case):
-        return {'fig': conf.PATHS['figdir'] / 'N216sims' / case / f'precip_autocorr.{case}.cons.png'}
-
-    rule_matrix = {
-        'case': conf.CASES,
-    }
+        return {'fig': conf.PATHS['figdir'] / 'ensemble' / case / f'precip_autocorr.{case}.cons.png'}
 
     @staticmethod
     def rule_run(inputs, outputs, case):
@@ -1061,6 +1059,8 @@ class PlotAutocorr(Rule):
 
 class CalcTCWV(Rule):
     """Calculates mean TCWV for each case, for ERA5 and each expt."""
+    rule_matrix = {'case': conf.CASES}
+
     @staticmethod
     def rule_inputs(case):
         inputs = {}
@@ -1075,9 +1075,7 @@ class CalcTCWV(Rule):
 
     @staticmethod
     def rule_outputs(case):
-        return {'tcwv_output': conf.PATHS['figdir'] / 'N216sims' / case / f'tcwv.{case}.cons.nc'}
-
-    rule_matrix = {'case': conf.CASES}
+        return {'tcwv_output': conf.PATHS['figdir'] / 'ensemble' / case / f'tcwv.{case}.cons.nc'}
 
     @staticmethod
     def rule_run(inputs, outputs, case):
@@ -1094,13 +1092,13 @@ class CalcTCWV(Rule):
 
 class PlotTCWV(Rule):
     """Plots mean TCWV for each case, for ERA5 and each expt."""
+    rule_matrix = {'case': conf.CASES}
+
     rule_inputs = CalcTCWV.rule_outputs
 
     @staticmethod
     def rule_outputs(case):
-        return {'fig': conf.PATHS['figdir'] / 'N216sims' / case / f'tcwv.{case}.cons.png'}
-
-    rule_matrix = {'case': conf.CASES}
+        return {'fig': conf.PATHS['figdir'] / 'ensemble' / case / f'tcwv.{case}.cons.png'}
 
     @staticmethod
     def rule_run(inputs, outputs, case):
@@ -1159,7 +1157,7 @@ class CalcMCSPCallingFreqData(Rule):
 
     @staticmethod
     def rule_outputs(case):
-        return {'mcsp_calling_freq': conf.PATHS['outdir'] / 'N216sims' / case / f'MCSP_calling_freq.{case}.nc'}
+        return {'mcsp_calling_freq': conf.PATHS['outdir'] / 'ensemble' / case / f'MCSP_calling_freq.{case}.nc'}
 
     @staticmethod
     def rule_run(inputs, outputs, case):
@@ -1195,7 +1193,7 @@ class PlotMCSPCallingFreq(Rule):
 
     @staticmethod
     def rule_outputs(case):
-        return {'fig': conf.PATHS['figdir'] / 'N216sims' / case / f'MCSP_calling_freq.{case}.png'}
+        return {'fig': conf.PATHS['figdir'] / 'ensemble' / case / f'MCSP_calling_freq.{case}.png'}
 
     @staticmethod
     def rule_run(inputs, outputs, case):
@@ -1301,14 +1299,14 @@ class FirstLookPlotERA5_500hPa_geopotential(Rule):
         d0 = str(times[0]).replace(' ', '_')
 
         outputs = {
-            'era5fig': conf.PATHS['figdir'] / 'N216sims' / case / 'geopot' / f'era5.geopot.{d0}.{time_offset}h.png',
+            'era5fig': conf.PATHS['figdir'] / 'ensemble' / case / 'geopot' / f'era5.geopot.{d0}.{time_offset}h.png',
         }
         for expt, sim in conf.EXPT_SIM.items():
             for i in range(10):
                 outputs[f'{expt}fig_{i}'] = (
                     conf.SIMDIR
                     / conf.PATHS['figdir']
-                    / 'N216sims'
+                    / 'ensemble'
                     / case
                     / 'geopot'
                     / f'{expt}.geopot.{d0}.em{i:02d}.{time_offset}h.png'
@@ -1567,7 +1565,7 @@ class PlotGeopotSpreadError(Rule):
         kwstr = kwstr.replace(' ', '')
         return {
             'fig': (
-                conf.PATHS['figdir'] / 'N216sims' / case / 'geopot' / f'geopot_spread_error.{case}.{domain}.{kwstr}.png'
+                conf.PATHS['figdir'] / 'ensemble' / case / 'geopot' / f'geopot_spread_error.{case}.{domain}.{kwstr}.png'
             ),
         }
 
@@ -1616,7 +1614,7 @@ class PlotAllCasesGeopotSpreadError(Rule):
         return {
             'fig': (
                 conf.PATHS['figdir']
-                / 'N216sims'
+                / 'ensemble'
                 / 'all_cases'
                 / 'geopot'
                 / f'geopot_spread_error.all_cases.{domain}.{kwstr}.png'
