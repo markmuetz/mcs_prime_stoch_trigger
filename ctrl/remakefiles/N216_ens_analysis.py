@@ -1539,7 +1539,6 @@ class PlotGeopotSpreadError(Rule):
     """Plots geopot spread-error, over global and tropical domain, for each case."""
     rule_matrix = {
         'plot_kwargs': [
-            dict(smooth=False, show_error_minus_spread=True),
             dict(smooth=24),
             dict(xlim=(0, 20)),
             dict(xlim=(0, 48)),
@@ -1582,11 +1581,11 @@ class PlotAllCasesGeopotSpreadError(Rule):
     """Plots geopot spread-error, over global and tropical domain, for all cases.."""
     rule_matrix = {
         'plot_kwargs': [
-            dict(smooth=False, show_error_minus_spread=True),
+            dict(smooth=False),
             dict(smooth=24),
             dict(xlim=(0, 20)),
             dict(xlim=(0, 48)),
-            dict(smooth=False, show_error_minus_spread=True, ens='red'),
+            dict(smooth=False, ens='red'),
         ],
         'domain': ['global', 'tropics'],
     }
