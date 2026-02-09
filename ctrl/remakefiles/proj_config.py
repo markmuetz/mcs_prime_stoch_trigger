@@ -6,7 +6,7 @@ from remake import util
 PATHS = {
     'datadir': Path('/gws/nopw/j04/mcs_prime/mmuetz/data/'),
     'outdir': Path('/gws/nopw/j04/mcs_prime/mmuetz/data/mcs_prime_output'),
-    'figdir': Path('/gws/nopw/j04/mcs_prime/mmuetz/data/mcs_prime_figs'),
+    'figdir': Path('/gws/nopw/j04/mcs_prime/mmuetz/data/mcs_prime_figs/N216sims/prod'),
     # Checking this dir causing proc to hang.
     # 'era5dir': Path('/does/not/exist'),
     'era5dir': Path('/badc/ecmwf-era5'),
