@@ -29,68 +29,15 @@ REGIONS = {
 }
 
 
-class ASoPN216regional(Rule):
-    """Use the ASoPlite class to calc the ASoP info for each region."""
-
-    rule_matrix = {
-        'expt': ['imerg', 'ctrl', 'vanillaMCSP', 'stochMCSP'],
-        'case': conf.CASES,
-        'region': list(REGIONS),
-        'coarsen_time': ['hourly', '3-hourly'],
-    }
-
-    @staticmethod
-    def rule_inputs(expt, case, region, coarsen_time):
-        if expt == 'imerg':
-            inputs = {
-                'precip': (
-                        conf.PATHS['outdir']
-                        / 'imerg_processed/N216grid/2020-07-01_04:00:00-2020-07-11_03:00:00/'
-                        / 'N216.cons.3B-HHR.MS.MRG.3IMERG.2020-07-01_04:00:00-2020-07-11_03:00:00.hourly.V07B.nc'
-                )
-            }
-        else:
-            suite = conf.EXPT_SIM[expt]
-            # inputs = {'precip': conf.SIMDIR / f'{suite}/processed/{expt}/{case}/engla_pa.precip.nc'}
-            # /gws/nopw/j04/mcs_prime/mmuetz/data/UM_sims/u-di727/share/cycle/20200101T0000Z/engl/um/
-            # englaa_pa.merged.20200101T0000Z.u-di727.m01s05i216.1h-mean.nc
-            inputs = {'precip': conf.SIMDIR / f'{suite}/share/cycle/{case}/engl/um/englaa_pa.merged.{case}.{suite}.m01s05i216.1h-mean.nc'}
-        return inputs
-
-    @staticmethod
-    def rule_outputs(expt, case, region, coarsen_time):
-        return {'output': conf.PATHS['outdir'] / 'ASoP' / expt / case / region / f'asop.{expt}.{case}.{region}.{coarsen_time}.nc'}
-
-    @staticmethod
-    def rule_run(inputs, outputs, expt, case, region, coarsen_time):
-        reg_extent = REGIONS[region]
-        lat_lon_sel = dict(longitude=slice(reg_extent[0], reg_extent[1]), latitude=slice(reg_extent[2], reg_extent[3]))
-
-        if expt == 'imerg':
-            da_precip = xr.open_dataarray(inputs['precip']).sel(**lat_lon_sel)
-        else:
-            da_precip = xr.open_dataset(inputs['precip']).precipitation_flux.sel(realization=1, **lat_lon_sel)
-            da_precip.values *= 3600
-            da_precip.attrs['units'] = 'mm h-1'
-
-        if coarsen_time == '3-hourly':
-            da_precip = da_precip.coarsen(time=3).mean()
-        da_precip = da_precip.load()
-
-        asop = ASoPlite(da_precip, coarsen_time)
-        asop.calc_all()
-        utils.to_netcdf_tmp_then_copy(asop.ds, outputs['output'])
-
-
 class PlotRegions(Rule):
-    """Plot the different regions."""
+    """Plot the different regions on a global map."""
     @staticmethod
     def rule_inputs():
         return {}
 
     @staticmethod
     def rule_outputs():
-        fig_asop_dir = conf.PATHS['figdir'] / 'ASoP' / 'dev'
+        fig_asop_dir = conf.PATHS['figdir'] / 'ASoP'
         return {'asop_regs': fig_asop_dir / f'asop.regions.png'}
 
     @staticmethod
@@ -130,11 +77,78 @@ class PlotRegions(Rule):
         plt.savefig(outputs['asop_regs'])
 
 
+def open_precip(inputs, expt, region, coarsen_time):
+    """Open precip DataArray, for given expt, region, and apply coarsening."""
+    reg_extent = REGIONS[region]
+    lat_lon_sel = dict(longitude=slice(reg_extent[0], reg_extent[1]), latitude=slice(reg_extent[2], reg_extent[3]))
+
+    precip_inputs_values = [inputs[k] for k in inputs if k.startswith(f'precip_{expt}')]
+
+    if expt == 'imerg':
+        da_precip = xr.open_mfdataset(precip_inputs_values).__xarray_dataarray_variable__.sel(**lat_lon_sel)
+    else:
+        # Realization 1 (not 0, which is deterministic).
+        da_precip = xr.open_mfdataset(precip_inputs_values).precipitation_flux.sel(realization=1, **lat_lon_sel)
+        da_precip.values *= 3600  # convert to mm h-1
+        da_precip.attrs['units'] = 'mm h-1'
+
+    if coarsen_time == '3-hourly':
+        da_precip = da_precip.coarsen(time=3).mean()
+    return da_precip
+
+
+class ASoPN216regional(Rule):
+    """Use the ASoPlite class to calc the ASoP info for each region."""
+
+    rule_matrix = {
+        'expt': ['imerg', 'ctrl', 'vanillaMCSP', 'stochMCSP'],
+        'case': conf.CASES + ['all_cases'],
+        'region': list(REGIONS),
+        'coarsen_time': ['hourly', '3-hourly'],
+    }
+
+    @staticmethod
+    def rule_inputs(expt, case, region, coarsen_time):
+        inputs = {}
+        if case == 'all_cases':
+            cases = conf.CASES
+        else:
+            cases = [case]
+
+        for case in cases:
+            month = case[4:6]
+            if expt == 'imerg':
+                inputs[f'precip_{expt}_{case}'] = (
+                    conf.PATHS['outdir']
+                    / f'imerg_processed/N216grid/2020-{month}-01_04:00:00-2020-{month}-11_03:00:00/'
+                    / f'N216.cons.3B-HHR.MS.MRG.3IMERG.2020-{month}-01_04:00:00-2020-{month}-11_03:00:00.hourly.V07B.nc'
+                )
+            else:
+                suite = conf.EXPT_SIM[expt]
+                inputs[f'precip_{expt}_{case}'] = conf.SIMDIR / f'{suite}/share/cycle/{case}/engl/um/englaa_pa.merged.{case}.{suite}.m01s05i216.1h-mean.nc'
+        return inputs
+
+    @staticmethod
+    def rule_outputs(expt, case, region, coarsen_time):
+        return {'output': conf.PATHS['outdir'] / 'ASoP' / expt / case / region / f'asop.{expt}.{case}.{region}.{coarsen_time}.nc'}
+
+    @staticmethod
+    def rule_run(inputs, outputs, expt, case, region, coarsen_time):
+        print('Running', expt, case, region, coarsen_time)
+
+        da_precip = open_precip(inputs, expt, region, coarsen_time)
+        da_precip = da_precip.load()
+
+        asop = ASoPlite(da_precip, coarsen_time)
+        asop.calc_all()
+        utils.to_netcdf_tmp_then_copy(asop.ds, outputs['output'])
+
+
 class PlotASoPN216regional(Rule):
     """Plot the regional ASoP data using ASoPlite."""
     rule_matrix = {
         'region': list(REGIONS),
-        'case': conf.CASES,
+        'case': conf.CASES + ['all_cases'],
         'coarsen_time': ['hourly', '3-hourly'],
     }
 
@@ -143,19 +157,7 @@ class PlotASoPN216regional(Rule):
         inputs = {}
         month = case[4:6]
         for expt in ['imerg', 'ctrl', 'vanillaMCSP', 'stochMCSP']:
-            if expt == 'imerg':
-                inputs[f'precip_{expt}'] = (
-                        conf.PATHS['outdir']
-                        / f'imerg_processed/N216grid/2020-{month}-01_04:00:00-2020-{month}-11_03:00:00/'
-                        / f'N216.cons.3B-HHR.MS.MRG.3IMERG.2020-{month}-01_04:00:00-2020-{month}-11_03:00:00.hourly.V07B.nc'
-                )
-            else:
-                suite = conf.EXPT_SIM[expt]
-                # inputs[f'precip_{expt}'] = conf.SIMDIR / f'{suite}/processed/{expt}/{case}/engla_pa.precip.nc'
-                # /gws/nopw/j04/mcs_prime/mmuetz/data/UM_sims/u-di727/share/cycle/20200101T0000Z/engl/um/
-                # englaa_pa.merged.20200101T0000Z.u-di727.m01s05i216.1h-mean.nc
-                inputs[f'precip_{expt}'] = conf.SIMDIR / f'{suite}/share/cycle/{case}/engl/um/englaa_pa.merged.{case}.{suite}.m01s05i216.1h-mean.nc'
-
+            inputs.update(ASoPN216regional.rule_inputs(expt, case, region, coarsen_time))
             inputs[f'asop_{expt}'] = ASoPN216regional.rule_outputs(expt, case, region, coarsen_time)['output']
         return inputs
 
@@ -171,20 +173,9 @@ class PlotASoPN216regional(Rule):
 
     @staticmethod
     def rule_run(inputs, outputs, region, case, coarsen_time):
-        reg_extent = REGIONS[region]
-        lat_lon_sel = dict(longitude=slice(reg_extent[0], reg_extent[1]), latitude=slice(reg_extent[2], reg_extent[3]))
-
         asops = {}
         for expt in ['imerg', 'ctrl', 'vanillaMCSP', 'stochMCSP']:
-            if expt == 'imerg':
-                da_precip = xr.open_dataarray(inputs[f'precip_{expt}']).sel(**lat_lon_sel)
-            else:
-                da_precip = xr.open_dataset(inputs[f'precip_{expt}']).precipitation_flux.sel(realization=1, **lat_lon_sel)
-                da_precip.values *= 3600
-                da_precip.attrs['units'] = 'mm h-1'
-
-            if coarsen_time == '3-hourly':
-                da_precip = da_precip.coarsen(time=3).mean()
+            da_precip = open_precip(inputs, expt, region, coarsen_time)
             asops[expt] = ASoPlite(da_precip, coarsen_time)
             asops[expt].load_ds(xr.open_dataset(inputs[f'asop_{expt}']))
 
@@ -198,7 +189,6 @@ class PlotASoPN216regional(Rule):
         fig.set_size_inches(16, 12)
         for ax, (expt, asop) in zip(axes.flatten(), asops.items()):
             asop.plot_precip_prob_matrix(ax=ax)
-            fig = plt.gcf()
             ax.set_title(expt)
         plt.savefig(outputs['precip_prob_matrix'])
 

@@ -17,10 +17,11 @@ class ASoPlite:
     * Klingaman et al., 2017 (KMM17): https://doi.org/10.5194/gmd-10-57-2017
     * Aim to match their colour scales exactly (for better or worse)
     """
-    def __init__(self, da, time_mean, biperiodic='neither', **user_config):
+    def __init__(self, da, time_mean, biperiodic='neither', aspect=1.5, **user_config):
         """xarray DataArray (da) must have 3 dims, time, latitude, longitude, in any order (including lon/lat)
 
         time_mean is user-supplied averaging, e.g., hourly, 3-hourly.
+        aspect is ratio of x-dir to y-dir grid spacing (at tropics) (defaults to UM N216 grid)
         Any config can be overridden with keyword args."""
         if 'lon' in da.coords and 'lat' in da.coords:
             da = da.rename(lon='longitude', lat='latitude')
@@ -31,6 +32,11 @@ class ASoPlite:
         self.da = da
         self.time_mean = time_mean
         self.biperiodic = biperiodic
+        # N216 grid means spacing of:
+        # 360 / (216 * 2) == 0.833deg in x-dir
+        # 180 / (216 * 1.5) == 0.555deg in y-dir
+        # dx == 1.5 * dy.
+        self.aspect = aspect
         self.config = {
             'precip_prob_matrix_bins_mmpday': np.array(
                 [0, 1, 2, 4, 6, 9, 12, 16, 20, 25, 30, 40, 60, 90, 130, 180, 100000]
@@ -340,7 +346,6 @@ class ASoPlite:
             print(i, j, k)
             shift_lon = i - 3
             shift_lat = j - 3
-            shift_time = k
             if k == 0:
                 if biperiodic == 'neither':
                     xyslice1 = (None, slice(3, -3), slice(3, -3))
@@ -397,7 +402,7 @@ class ASoPlite:
         cmap.set_over(over_colour)
         norm = mcolors.BoundaryNorm([0.05, 0.15, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75, 0.85, 0.95], cmap.N)
 
-        x = np.linspace(-3, 3, 7)
+        x = np.linspace(-3, 3, 7) * self.aspect # Corrects for grid *at equator*.
         y = np.linspace(-3, 3, 7)
         X, Y = np.meshgrid(x, y)
         bins = np.array([0, 0.5, 1.5, 2.5, 3.5])
@@ -407,7 +412,7 @@ class ASoPlite:
         for i in range(5):
             for j in range(1, 5):
                 spat_temp_corr2[i, j - 1] = self.ds.spat_temp_corr.values[i, :, :][d == j].mean()
-        # sns.heatmap(pd.DataFrame(spat_temp_corr2)[::-1], ax=ax, annot=True, norm=norm, cmap=cmap)
+
         im = ax.imshow(spat_temp_corr2, origin='lower', cmap=cmap, norm=norm, aspect=1 / 1.3)
         ax.set_xticks(range(4))
         ax.set_yticks(range(5))
