@@ -38,7 +38,7 @@ class PlotRegions(Rule):
     @staticmethod
     def rule_outputs():
         fig_asop_dir = conf.PATHS['figdir'] / 'ASoP'
-        return {'asop_regs': fig_asop_dir / f'asop.regions.png'}
+        return {'asop_regs': fig_asop_dir / f'asop.regions.pdf'}
 
     @staticmethod
     def rule_run(inputs, outputs):
@@ -165,10 +165,10 @@ class PlotASoPN216regional(Rule):
     def rule_outputs(region, case, coarsen_time):
         fig_asop_dir = conf.PATHS['figdir'] / 'ASoP'
         return {
-            'fractional_contrib': fig_asop_dir / case / region / f'asop.fractional_contrib.{region}.{case}.{coarsen_time}.png',
-            'precip_prob_matrix': fig_asop_dir / case / region / f'asop.precip_prob_matrix.{region}.{case}.{coarsen_time}.png',
-            '7x7_spat_corr': fig_asop_dir / case / region / f'asop.7x7_spat_corr.{region}.{case}.{coarsen_time}.png',
-            '7x7_spat_temp_corr': fig_asop_dir / case / region / f'asop.7x7_spat_temp_corr.{region}.{case}.{coarsen_time}.png',
+            'fractional_contrib': fig_asop_dir / case / region / f'asop.fractional_contrib.{region}.{case}.{coarsen_time}.pdf',
+            'precip_prob_matrix': fig_asop_dir / case / region / f'asop.precip_prob_matrix.{region}.{case}.{coarsen_time}.pdf',
+            '7x7_spat_corr': fig_asop_dir / case / region / f'asop.7x7_spat_corr.{region}.{case}.{coarsen_time}.pdf',
+            '7x7_spat_temp_corr': fig_asop_dir / case / region / f'asop.7x7_spat_temp_corr.{region}.{case}.{coarsen_time}.pdf',
         }
 
     @staticmethod

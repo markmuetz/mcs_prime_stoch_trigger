@@ -326,7 +326,7 @@ class PlotPrecipSnapshots(Rule):
             cbar = plt.colorbar(im, ax=global_axes, label='precip. [mm h$^{-1}$]', extend='max', ticks=boundaries)
             cbar.set_ticklabels([str(v) for v in boundaries])
 
-            plt.savefig(figdir / f'precip_snapshot.global.t{i:03d}.png')
+            plt.savefig(figdir / f'precip_snapshot.global.t{i:03d}.pdf')
 
             # Remove bounding boxes before plotting regions.
             for rect in rects:
@@ -341,7 +341,7 @@ class PlotPrecipSnapshots(Rule):
                 for ax in global_axes.flat:
                     ax.set_xlim(*region['xlim'])
                     ax.set_ylim(*region['ylim'])
-                plt.savefig(figdir / f'precip_snapshot.{region_name}.t{i:03d}.png')
+                plt.savefig(figdir / f'precip_snapshot.{region_name}.t{i:03d}.pdf')
             plt.close('all')
 
         outputs['dummy'].write_text('done')
@@ -429,9 +429,9 @@ class PlotTotalPrecip(Rule):
     @staticmethod
     def rule_outputs(case, regrid_method, ens, red_cf_expt):
         if red_cf_expt:
-            return {'fig': conf.PATHS['figdir'] / 'ensemble' / case / f'total_precip.{case}.{regrid_method}.ens_{ens}.inc_red_cf.png'}
+            return {'fig': conf.PATHS['figdir'] / 'ensemble' / case / f'total_precip.{case}.{regrid_method}.ens_{ens}.inc_red_cf.pdf'}
         else:
-            return {'fig': conf.PATHS['figdir'] / 'ensemble' / case / f'total_precip.{case}.{regrid_method}.ens_{ens}.png'}
+            return {'fig': conf.PATHS['figdir'] / 'ensemble' / case / f'total_precip.{case}.{regrid_method}.ens_{ens}.pdf'}
 
     @staticmethod
     def rule_run(inputs, outputs, case, regrid_method, ens, red_cf_expt):
@@ -772,7 +772,7 @@ class PlotSpreadError(Rule):
     def rule_outputs(plot_kwargs, case, regrid_method):
         kwstr = '-'.join(f'{k}={v}' for k, v in plot_kwargs.items())
         kwstr = kwstr.replace(' ', '')
-        return {'fig': conf.PATHS['figdir'] / 'ensemble' / case / f'spread_error.{case}.{kwstr}.{regrid_method}.png'}
+        return {'fig': conf.PATHS['figdir'] / 'ensemble' / case / f'spread_error.{case}.{kwstr}.{regrid_method}.pdf'}
 
     @staticmethod
     def rule_run(inputs, outputs, plot_kwargs, case, regrid_method):
@@ -827,11 +827,11 @@ class PlotAllCasesSpreadError(Rule):
             'fig': (conf.PATHS['figdir']
             / 'ensemble'
             / 'all_cases'
-            / f'spread_error.all_cases.{kwstr}.{regrid_method}.png'),
+            / f'spread_error.all_cases.{kwstr}.{regrid_method}.pdf'),
             'summary_fig': (conf.PATHS['figdir']
             / 'ensemble'
             / 'all_cases'
-            / f'spread_error.summary.all_cases.{kwstr}.{regrid_method}.png'),
+            / f'spread_error.summary.all_cases.{kwstr}.{regrid_method}.pdf'),
         }
 
     @staticmethod
@@ -978,7 +978,7 @@ class PlotAutocorr(Rule):
 
     @staticmethod
     def rule_outputs(case):
-        return {'fig': conf.PATHS['figdir'] / 'ensemble' / case / f'precip_autocorr.{case}.cons.png'}
+        return {'fig': conf.PATHS['figdir'] / 'ensemble' / case / f'precip_autocorr.{case}.cons.pdf'}
 
     @staticmethod
     def rule_run(inputs, outputs, case):
@@ -1098,7 +1098,7 @@ class PlotTCWV(Rule):
 
     @staticmethod
     def rule_outputs(case):
-        return {'fig': conf.PATHS['figdir'] / 'ensemble' / case / f'tcwv.{case}.cons.png'}
+        return {'fig': conf.PATHS['figdir'] / 'ensemble' / case / f'tcwv.{case}.cons.pdf'}
 
     @staticmethod
     def rule_run(inputs, outputs, case):
@@ -1193,7 +1193,7 @@ class PlotMCSPCallingFreq(Rule):
 
     @staticmethod
     def rule_outputs(case):
-        return {'fig': conf.PATHS['figdir'] / 'ensemble' / case / f'MCSP_calling_freq.{case}.png'}
+        return {'fig': conf.PATHS['figdir'] / 'ensemble' / case / f'MCSP_calling_freq.{case}.pdf'}
 
     @staticmethod
     def rule_run(inputs, outputs, case):
@@ -1299,7 +1299,7 @@ class FirstLookPlotERA5_500hPa_geopotential(Rule):
         d0 = str(times[0]).replace(' ', '_')
 
         outputs = {
-            'era5fig': conf.PATHS['figdir'] / 'ensemble' / case / 'geopot' / f'era5.geopot.{d0}.{time_offset}h.png',
+            'era5fig': conf.PATHS['figdir'] / 'ensemble' / case / 'geopot' / f'era5.geopot.{d0}.{time_offset}h.pdf',
         }
         for expt, sim in conf.EXPT_SIM.items():
             for i in range(10):
@@ -1309,7 +1309,7 @@ class FirstLookPlotERA5_500hPa_geopotential(Rule):
                     / 'ensemble'
                     / case
                     / 'geopot'
-                    / f'{expt}.geopot.{d0}.em{i:02d}.{time_offset}h.png'
+                    / f'{expt}.geopot.{d0}.em{i:02d}.{time_offset}h.pdf'
                 )
         return outputs
 
@@ -1564,7 +1564,7 @@ class PlotGeopotSpreadError(Rule):
         kwstr = kwstr.replace(' ', '')
         return {
             'fig': (
-                conf.PATHS['figdir'] / 'ensemble' / case / 'geopot' / f'geopot_spread_error.{case}.{domain}.{kwstr}.png'
+                conf.PATHS['figdir'] / 'ensemble' / case / 'geopot' / f'geopot_spread_error.{case}.{domain}.{kwstr}.pdf'
             ),
         }
 
@@ -1616,7 +1616,7 @@ class PlotAllCasesGeopotSpreadError(Rule):
                 / 'ensemble'
                 / 'all_cases'
                 / 'geopot'
-                / f'geopot_spread_error.all_cases.{domain}.{kwstr}.png'
+                / f'geopot_spread_error.all_cases.{domain}.{kwstr}.pdf'
             ),
         }
 
