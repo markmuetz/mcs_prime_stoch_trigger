@@ -101,7 +101,7 @@ class ASoPN216regional(Rule):
     """Use the ASoPlite class to calc the ASoP info for each region."""
 
     rule_matrix = {
-        'expt': ['imerg', 'ctrl', 'vanillaMCSP', 'stochMCSP'],
+        'expt': ['imerg', 'ctrl', 'origMCSP', 'stochMCSP'],
         'case': conf.CASES + ['all_cases'],
         'region': list(REGIONS),
         'coarsen_time': ['hourly', '3-hourly'],
@@ -156,7 +156,7 @@ class PlotASoPN216regional(Rule):
     def rule_inputs(region, case, coarsen_time):
         inputs = {}
         month = case[4:6]
-        for expt in ['imerg', 'ctrl', 'vanillaMCSP', 'stochMCSP']:
+        for expt in ['imerg', 'ctrl', 'origMCSP', 'stochMCSP']:
             inputs.update(ASoPN216regional.rule_inputs(expt, case, region, coarsen_time))
             inputs[f'asop_{expt}'] = ASoPN216regional.rule_outputs(expt, case, region, coarsen_time)['output']
         return inputs
@@ -174,7 +174,7 @@ class PlotASoPN216regional(Rule):
     @staticmethod
     def rule_run(inputs, outputs, region, case, coarsen_time):
         asops = {}
-        for expt in ['imerg', 'ctrl', 'vanillaMCSP', 'stochMCSP']:
+        for expt in ['imerg', 'ctrl', 'origMCSP', 'stochMCSP']:
             da_precip = open_precip(inputs, expt, region, coarsen_time)
             asops[expt] = ASoPlite(da_precip, coarsen_time)
             asops[expt].load_ds(xr.open_dataset(inputs[f'asop_{expt}']))
