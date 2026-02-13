@@ -1,3 +1,5 @@
+import string
+
 import cartopy.crs as ccrs
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
@@ -84,7 +86,7 @@ def open_precip(inputs, expt, region, coarsen_time):
 
     precip_inputs_values = [inputs[k] for k in inputs if k.startswith(f'precip_{expt}')]
 
-    if expt == 'imerg':
+    if expt.lower() == 'imerg':
         da_precip = xr.open_mfdataset(precip_inputs_values).__xarray_dataarray_variable__.sel(**lat_lon_sel)
     else:
         # Realization 1 (not 0, which is deterministic).
@@ -155,7 +157,6 @@ class PlotASoPN216regional(Rule):
     @staticmethod
     def rule_inputs(region, case, coarsen_time):
         inputs = {}
-        month = case[4:6]
         for expt in ['imerg', 'ctrl', 'origMCSP', 'stochMCSP']:
             inputs.update(ASoPN216regional.rule_inputs(expt, case, region, coarsen_time))
             inputs[f'asop_{expt}'] = ASoPN216regional.rule_outputs(expt, case, region, coarsen_time)['output']
@@ -165,7 +166,8 @@ class PlotASoPN216regional(Rule):
     def rule_outputs(region, case, coarsen_time):
         fig_asop_dir = conf.PATHS['figdir'] / 'ASoP'
         return {
-            'fractional_contrib': fig_asop_dir / case / region / f'asop.fractional_contrib.{region}.{case}.{coarsen_time}.pdf',
+            # This is a 15 MB file if I use .pdf.
+            'fractional_contrib': fig_asop_dir / case / region / f'asop.fractional_contrib.{region}.{case}.{coarsen_time}.png',
             'precip_prob_matrix': fig_asop_dir / case / region / f'asop.precip_prob_matrix.{region}.{case}.{coarsen_time}.pdf',
             '7x7_spat_corr': fig_asop_dir / case / region / f'asop.7x7_spat_corr.{region}.{case}.{coarsen_time}.pdf',
             '7x7_spat_temp_corr': fig_asop_dir / case / region / f'asop.7x7_spat_temp_corr.{region}.{case}.{coarsen_time}.pdf',
@@ -179,31 +181,63 @@ class PlotASoPN216regional(Rule):
             asops[expt] = ASoPlite(da_precip, coarsen_time)
             asops[expt].load_ds(xr.open_dataset(inputs[f'asop_{expt}']))
 
-        fig, axes = plt.subplots(4, 4, layout='constrained', subplot_kw={'projection': ccrs.PlateCarree()})
-        fig.set_size_inches(20, 6)
+        fig, axes = plt.subplots(4, 4, layout='constrained', subplot_kw={'projection': ccrs.PlateCarree()}, dpi=600)
+        fig.set_size_inches(20, 5)
         for axcol, (expt, asop) in zip(axes.T, asops.items()):
             asop.plot_fractional_contrib(axes=axcol)
+            expt = expt.upper() if expt == 'imerg' else expt
+            axcol[0].set_title(expt)
+            axcol[1].set_title('')
+            axcol[2].set_title('')
+            axcol[3].set_title('')
+
+        for i, ax in enumerate(axes.flatten()):
+            c = string.ascii_lowercase[i]
+            ax.set_title(f'{c})', loc='left')
+        for i in range(4):
+            ax = axes[i, 0]
+            if i < 3:
+                t0 = asop.fractional_contrib_thresh_mmpday[i]
+                t1 = asop.fractional_contrib_thresh_mmpday[i + 1]
+                label = f'{t0:.0f}–{t1:.0f}\nmm day$^{{-1}}$'
+            else:
+                t0 = asop.fractional_contrib_thresh_mmpday[i]
+                label = f'>{t0:.0f}\nmm day$^{{-1}}$'
+            # ax.set_ylabel(label)
+            # cartopy messes up set_ylabel - position manually.
+            ax.text(-0.05, 0.5, label, transform=ax.transAxes,
+                    va='center', ha='center', rotation=90)
+
         plt.savefig(outputs['fractional_contrib'])
 
         fig, axes = plt.subplots(2, 2, layout='constrained')
         fig.set_size_inches(16, 12)
-        for ax, (expt, asop) in zip(axes.flatten(), asops.items()):
+        for i, (ax, (expt, asop)) in enumerate(zip(axes.flatten(), asops.items())):
             asop.plot_precip_prob_matrix(ax=ax)
+            expt = expt.upper() if expt == 'imerg' else expt
             ax.set_title(expt)
+            c = string.ascii_lowercase[i]
+            ax.set_title(f'{c})', loc='left')
         plt.savefig(outputs['precip_prob_matrix'])
 
         fig, axes = plt.subplots(2, 2)
         fig.set_size_inches(12, 8)
-        for ax, (expt, asop) in zip(axes.flatten(), asops.items()):
+        for i, (ax, (expt, asop)) in enumerate(zip(axes.flatten(), asops.items())):
             asop.plot_7x7_spat_corr(ax=ax)
+            expt = expt.upper() if expt == 'imerg' else expt
             ax.set_title(expt)
+            c = string.ascii_lowercase[i]
+            ax.set_title(f'{c})', loc='left')
         plt.savefig(outputs['7x7_spat_corr'])
 
         fig, axes = plt.subplots(2, 2, sharex=True, sharey=True, layout='constrained')
-        fig.set_size_inches(10, 8)
-        for ax, (expt, asop) in zip(axes.flatten(), asops.items()):
+        fig.set_size_inches(7, 5)
+        for i, (ax, (expt, asop)) in enumerate(zip(axes.flatten(), asops.items())):
             im = asop.plot_7x7_spat_temp_corr(ax=ax)
+            expt = expt.upper() if expt == 'imerg' else expt
             ax.set_title(expt)
+            c = string.ascii_lowercase[i]
+            ax.set_title(f'{c})', loc='left')
         plt.colorbar(im, ax=axes, orientation='vertical', label='Corr. with centre at lag=0')
         for ax in axes[:, 0]:
             if coarsen_time == '3-hourly':

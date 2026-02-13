@@ -18,7 +18,7 @@ N_ENS_MEM = 10
 
 EXPT_SIM = {
     'ctrl': 'u-di727',
-    'vanillaMCSP': 'u-di728',
+    'origMCSP': 'u-di728',
     'stochMCSP': 'u-dg135',
 }
 

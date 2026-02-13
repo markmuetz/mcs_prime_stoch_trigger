@@ -298,7 +298,7 @@ class PlotPrecipSnapshots(Rule):
 
             # Plot regions on global view first
             global_fig, global_axes = plt.subplots(2, 2, figsize=(12, 6), subplot_kw={'projection': ccrs.PlateCarree()},
-                                                   layout='constrained')
+                                                   layout='constrained', dpi=600)
             global_fig.suptitle(f'{imerg_time:%Y-%m-%d %H:%M}Z')
 
             boundaries = [0.25, 0.5, 1, 2, 4, 8, 16, 32, 64]
@@ -309,7 +309,10 @@ class PlotPrecipSnapshots(Rule):
                 c = string.ascii_lowercase[j]
                 im = ax.pcolormesh(da.longitude, da.latitude, da.isel(time=i), norm=norm, cmap=cmap)
                 ax.coastlines()
-                ax.set_title(f'{c}) {name}', loc='left')
+                if name == 'imerg':
+                    name = 'IMERG'
+                ax.set_title(name)
+                ax.set_title(f'{c})', loc='left')
                 # Draw region boxes
                 for region_name, region in regions.items():
                     rect = plt.Rectangle(
@@ -326,7 +329,7 @@ class PlotPrecipSnapshots(Rule):
             cbar = plt.colorbar(im, ax=global_axes, label='precip. [mm h$^{-1}$]', extend='max', ticks=boundaries)
             cbar.set_ticklabels([str(v) for v in boundaries])
 
-            plt.savefig(figdir / f'precip_snapshot.global.t{i:03d}.pdf')
+            plt.savefig(figdir / f'precip_snapshot.global.t{i:03d}.png')
 
             # Remove bounding boxes before plotting regions.
             for rect in rects:
@@ -341,7 +344,7 @@ class PlotPrecipSnapshots(Rule):
                 for ax in global_axes.flat:
                     ax.set_xlim(*region['xlim'])
                     ax.set_ylim(*region['ylim'])
-                plt.savefig(figdir / f'precip_snapshot.{region_name}.t{i:03d}.pdf')
+                plt.savefig(figdir / f'precip_snapshot.{region_name}.t{i:03d}.png')
             plt.close('all')
 
         outputs['dummy'].write_text('done')
@@ -390,6 +393,7 @@ class CalcTotalPrecip(Rule):
 
     @staticmethod
     def rule_run(inputs, outputs, case, regrid_method, ens, red_cf_expt):
+        print(case, regrid_method, ens, red_cf_expt)
         ds = xr.Dataset()
         if red_cf_expt:
             expts = list(conf.EXPT_SIM) + ['red_cf']
@@ -683,18 +687,22 @@ def plot_summary_spread_error_ts(expt_dRMSE, expt_eRMSE, ens='full'):
     ax.axhline(y=0, ls='--', color='k')
     ax.set_xlabel('sigma')
     ax.set_ylabel('spread - error (mm h$^{-1}$)')
-    ax.legend()
 
 
-def plot_spread_error_ts(expt_dRMSE, expt_eRMSE, smooth=False, xlim='full', show_error_minus_spread=False, ens='full'):
-    plot_sigmas = [0, 2, 4]
+def plot_spread_error_ts(expt_dRMSE, expt_eRMSE, smooth=False, xlim='full', show_error_minus_spread=False, ens='full',
+                         plot_sigmas=(0, 2, 4)):
     ntime = len(expt_eRMSE['ctrl'].time)
 
-    fig, axes = plt.subplots(1, len(plot_sigmas), sharex=True, layout='constrained')
-    fig.set_size_inches(20, 6)
+    if len(plot_sigmas) == 3:
+        fig, axes = plt.subplots(1, len(plot_sigmas), sharex=True, layout='constrained')
+        fig.set_size_inches(20, 6)
+    else:
+        nrows = (len(plot_sigmas) - 1) // 3 + 1
+        fig, axes = plt.subplots(nrows, 3, sharex=True, layout='constrained')
+        fig.set_size_inches(20, 6 * nrows)
     cs = plt.rcParams['axes.prop_cycle'].by_key()['color']
 
-    for ax, sigma in zip(axes, plot_sigmas):
+    for ax, sigma in zip(axes.flatten(), plot_sigmas):
         if smooth:
             ax.set_title(rf'$\sigma=${sigma} ({smooth} h smoothing)')
         else:
@@ -721,32 +729,46 @@ def plot_spread_error_ts(expt_dRMSE, expt_eRMSE, smooth=False, xlim='full', show
         times_days[1::2] = [''] * len(times_days[1::2])
         ax.set_xticks(times_half_days_hours, times_days)
         ax.set_xlim((0, ntime))
-    axes[0].set_ylabel('RMSE (mm h$^{-1}$)')
+    for i, ax in enumerate(axes.flatten()):
+        c = string.ascii_lowercase[i]
+        ax.set_title(f'{c})', loc='left')
+
     if xlim != 'full':
         ax.set_xlim(xlim)
     if smooth and xlim == 'full':
         ax.set_xlim((smooth, 240 - smooth))
-    for ax in axes:
+    for ax in axes.flatten():
         ax.relim()
         if not show_error_minus_spread:
             ax.set_ylim((0, None))
-    if len(axes) % 2 == 1:
-        midax = axes[len(axes) // 2]
+
+    if axes.ndim == 1:
+        axes[0].set_ylabel('RMSE (mm h$^{-1}$)')
+        if len(axes) % 2 == 1:
+            midax = axes[len(axes) // 2]
+            midax.legend(ncol=len(conf.EXPT_SIM), loc='upper center')
+            midax.set_xlabel('time (day)')
+            ylim = midax.get_ylim()
+            midax.set_ylim((ylim[0], ylim[1] * 1.2))
+        else:
+            axes[-1].legend(ncol=len(conf.EXPT_SIM))
+            for ax in axes.flatten():
+                ax.set_xlabel('time (day)')
+    else:
+        for i in range(axes.shape[0]):
+            axes[i, 0].set_ylabel('RMSE (mm h$^{-1}$)')
+        midax = axes[0, 1]
         midax.legend(ncol=len(conf.EXPT_SIM))
         midax.set_xlabel('time (day)')
         ylim = midax.get_ylim()
         midax.set_ylim((ylim[0], ylim[1] * 1.2))
-    else:
-        axes[-1].legend(ncol=len(conf.EXPT_SIM))
-        for ax in axes.flatten():
-            ax.set_xlabel('time (day)')
 
 
 class PlotSpreadError(Rule):
     """Plot spread-error for each experiment (single case), as a function of sigma (Guassian smoothing param).
 
-    spread: eRMSE
-    error: dRMSE
+    spread: dRMSE
+    error: eRMSE
     """
     rule_matrix = {
         'plot_kwargs': [
@@ -772,7 +794,11 @@ class PlotSpreadError(Rule):
     def rule_outputs(plot_kwargs, case, regrid_method):
         kwstr = '-'.join(f'{k}={v}' for k, v in plot_kwargs.items())
         kwstr = kwstr.replace(' ', '')
-        return {'fig': conf.PATHS['figdir'] / 'ensemble' / case / f'spread_error.{case}.{kwstr}.{regrid_method}.pdf'}
+        basedir = conf.PATHS['figdir'] / 'ensemble' / case
+        return {
+            'fig': basedir / f'spread_error.{case}.{kwstr}.{regrid_method}.pdf',
+            'fig_all_sigmas': basedir / f'spread_error.{case}.{kwstr}.all_sigmas.{regrid_method}.pdf',
+        }
 
     @staticmethod
     def rule_run(inputs, outputs, plot_kwargs, case, regrid_method):
@@ -784,6 +810,8 @@ class PlotSpreadError(Rule):
         print(expt_dRMSE)
         plot_spread_error_ts(expt_dRMSE, expt_eRMSE, **plot_kwargs)
         plt.savefig(outputs['fig'])
+        plot_spread_error_ts(expt_dRMSE, expt_eRMSE, plot_sigmas=settings.sigmas, **plot_kwargs)
+        plt.savefig(outputs['fig_all_sigmas'])
 
 
 class PlotAllCasesSpreadError(Rule):
@@ -823,15 +851,11 @@ class PlotAllCasesSpreadError(Rule):
     def rule_outputs(plot_kwargs, regrid_method):
         kwstr = '-'.join(f'{k}={v}' for k, v in plot_kwargs.items())
         kwstr = kwstr.replace(' ', '')
+        basedir = conf.PATHS['figdir'] / 'ensemble' / 'all_cases'
         return {
-            'fig': (conf.PATHS['figdir']
-            / 'ensemble'
-            / 'all_cases'
-            / f'spread_error.all_cases.{kwstr}.{regrid_method}.pdf'),
-            'summary_fig': (conf.PATHS['figdir']
-            / 'ensemble'
-            / 'all_cases'
-            / f'spread_error.summary.all_cases.{kwstr}.{regrid_method}.pdf'),
+            'fig': basedir / f'spread_error.all_cases.{kwstr}.{regrid_method}.pdf',
+            'fig_all_sigmas': basedir / f'spread_error.all_cases.{kwstr}.all_sigmas.{regrid_method}.pdf',
+            'summary_fig': basedir / f'spread_error.summary.all_cases.{kwstr}.{regrid_method}.pdf',
         }
 
     @staticmethod
@@ -869,11 +893,15 @@ class PlotAllCasesSpreadError(Rule):
         plot_spread_error_ts(expt_dRMSE, expt_eRMSE, **plot_kwargs)
         plt.savefig(outputs['fig'])
 
+        plot_spread_error_ts(expt_dRMSE, expt_eRMSE, plot_sigmas=settings.sigmas, **plot_kwargs)
+        plt.savefig(outputs['fig_all_sigmas'])
+
         plot_summary_spread_error_ts(expt_dRMSE, expt_eRMSE, ens=plot_kwargs.get('ens', 'red'))
         plt.savefig(outputs['summary_fig'])
 
 
 class CalcAutocorrImerg(Rule):
+    enabled = False
     """Calculates the one-timestep auto correlation for IMERG"""
     rule_matrix = {'case': conf.CASES}
 
@@ -917,6 +945,7 @@ class CalcAutocorrImerg(Rule):
 
 
 class CalcAutocorrExpt(Rule):
+    enabled = False
     """Calculates the one-timestep auto correlation for each expt."""
     rule_matrix = {
         'expt': list(conf.EXPT_SIM.keys()),
@@ -963,6 +992,7 @@ class CalcAutocorrExpt(Rule):
 
 
 class PlotAutocorr(Rule):
+    enabled = False
     """Plots the one-timestep auto correlation for IMERG/each expt."""
     rule_matrix = {
         'case': conf.CASES,
@@ -1079,6 +1109,7 @@ class CalcTCWV(Rule):
 
     @staticmethod
     def rule_run(inputs, outputs, case):
+        print(case)
         e5ds = xr.open_dataset(inputs['tcwv_era5'])
         dsout = xr.Dataset()
         dsout['ERA5_tcwv'] = e5ds.__xarray_dataarray_variable__.mean(dim=['time'])
