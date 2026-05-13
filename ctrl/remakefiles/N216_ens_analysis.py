@@ -695,11 +695,11 @@ def plot_spread_error_ts(expt_dRMSE, expt_eRMSE, smooth=False, xlim='full', show
 
     if len(plot_sigmas) == 3:
         fig, axes = plt.subplots(1, len(plot_sigmas), sharex=True, layout='constrained')
-        fig.set_size_inches(20, 6)
+        fig.set_size_inches(8, 3.5)
     else:
         nrows = (len(plot_sigmas) - 1) // 3 + 1
         fig, axes = plt.subplots(nrows, 3, sharex=True, layout='constrained')
-        fig.set_size_inches(20, 6 * nrows)
+        fig.set_size_inches(8, 3.5 * nrows)
     cs = plt.rcParams['axes.prop_cycle'].by_key()['color']
 
     for ax, sigma in zip(axes.flatten(), plot_sigmas):
@@ -744,24 +744,14 @@ def plot_spread_error_ts(expt_dRMSE, expt_eRMSE, smooth=False, xlim='full', show
 
     if axes.ndim == 1:
         axes[0].set_ylabel('RMSE (mm h$^{-1}$)')
-        if len(axes) % 2 == 1:
-            midax = axes[len(axes) // 2]
-            midax.legend(ncol=len(conf.EXPT_SIM), loc='upper center')
-            midax.set_xlabel('time (day)')
-            ylim = midax.get_ylim()
-            midax.set_ylim((ylim[0], ylim[1] * 1.2))
-        else:
-            axes[-1].legend(ncol=len(conf.EXPT_SIM))
-            for ax in axes.flatten():
-                ax.set_xlabel('time (day)')
     else:
         for i in range(axes.shape[0]):
             axes[i, 0].set_ylabel('RMSE (mm h$^{-1}$)')
-        midax = axes[0, 1]
-        midax.legend(ncol=len(conf.EXPT_SIM))
-        midax.set_xlabel('time (day)')
-        ylim = midax.get_ylim()
-        midax.set_ylim((ylim[0], ylim[1] * 1.2))
+    for ax in axes.flatten():
+        ax.set_xlabel('time (day)')
+
+    handles, labels = axes.flatten()[0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc='outside lower center', ncol=len(conf.EXPT_SIM))
 
 
 class PlotSpreadError(Rule):
@@ -890,6 +880,7 @@ class PlotAllCasesSpreadError(Rule):
                 case_expt_dRMSEs.append(case_expt_dRMSE)
             expt_eRMSE[expt] = xr.concat(case_expt_eRMSEs, dim='case').mean(dim='case')
             expt_dRMSE[expt] = xr.concat(case_expt_dRMSEs, dim='case').mean(dim='case')
+        print()
         plot_spread_error_ts(expt_dRMSE, expt_eRMSE, **plot_kwargs)
         plt.savefig(outputs['fig'])
 
@@ -1122,6 +1113,7 @@ class CalcTCWV(Rule):
 
 
 class PlotTCWV(Rule):
+    enabled = False
     """Plots mean TCWV for each case, for ERA5 and each expt."""
     rule_matrix = {'case': conf.CASES}
 

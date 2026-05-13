@@ -175,27 +175,47 @@ class PlotASoPN216regional(Rule):
 
     @staticmethod
     def rule_run(inputs, outputs, region, case, coarsen_time):
+        print('oh hai')
         asops = {}
         for expt in ['imerg', 'Control', 'PRIME-MCSP', 'STOCH-PRIME-MCSP']:
             da_precip = open_precip(inputs, expt, region, coarsen_time)
             asops[expt] = ASoPlite(da_precip, coarsen_time)
             asops[expt].load_ds(xr.open_dataset(inputs[f'asop_{expt}']))
 
-        fig, axes = plt.subplots(4, 4, layout='constrained', subplot_kw={'projection': ccrs.PlateCarree()}, dpi=600)
-        fig.set_size_inches(20, 5)
-        for axcol, (expt, asop) in zip(axes.T, asops.items()):
-            asop.plot_fractional_contrib(axes=axcol)
+        # fig, axes = plt.subplots(4, 4, layout='constrained', subplot_kw={'projection': ccrs.PlateCarree()}, dpi=600)
+        # fig, axes = plt.subplots(9, 2, layout='constrained', subplot_kw={'projection': ccrs.PlateCarree()}, dpi=600)
+        # fig.set_size_inches(10, 8)
+        fig = plt.figure(layout='constrained', dpi=600)
+        if region == 'eq_warm_pool':
+            fig.set_size_inches(8, 10)
+        else:
+            fig.set_size_inches(8, 8)
+        gs = fig.add_gridspec(10, 2, height_ratios=[1] * 4 + [0.3] + [1] * 4 + [0.3])
+
+        axes = np.array([
+            [fig.add_subplot(gs[r, c], projection=ccrs.PlateCarree()) for c in range(2)]
+            for r in [0, 1, 2, 3, 5, 6, 7, 8]
+        ])
+        cbar_ax = fig.add_subplot(gs[-1, :])  # spans both columns
+
+        for axcol, (expt, asop) in zip([axes[:4, 0], axes[:4, 1], axes[4:, 0], axes[4:, 1]], asops.items()):
+            print(f'i am in ur loopz {expt}')
+            im = asop.plot_fractional_contrib(axes=axcol, colorbar=False)
             expt = expt.upper() if expt == 'imerg' else expt
             axcol[0].set_title(expt)
             axcol[1].set_title('')
             axcol[2].set_title('')
             axcol[3].set_title('')
 
-        for i, ax in enumerate(axes.flatten()):
+        print('i maked one colorbar')
+        plt.colorbar(im, cax=cbar_ax, orientation='horizontal', extend='min', label='fractional contribution')
+
+        for i, ax in enumerate([*axes[:4, 0], *axes[:4, 1], *axes[4:, 0], *axes[4:, 1]]):
             c = string.ascii_lowercase[i]
             ax.set_title(f'{c})', loc='left')
-        for i in range(4):
-            ax = axes[i, 0]
+        for row in range(8):
+            i = row % 4
+            ax = axes[row, 0]
             if i < 3:
                 t0 = asop.fractional_contrib_thresh_mmpday[i]
                 t1 = asop.fractional_contrib_thresh_mmpday[i + 1]
@@ -208,6 +228,7 @@ class PlotASoPN216regional(Rule):
             ax.text(-0.05, 0.5, label, transform=ax.transAxes,
                     va='center', ha='center', rotation=90)
 
+        print(f'i makde a picutre! {outputs["fractional_contrib"]}')
         plt.savefig(outputs['fractional_contrib'])
 
         fig, axes = plt.subplots(2, 2, layout='constrained')

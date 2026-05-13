@@ -168,7 +168,7 @@ class ASoPlite:
         for i in range(1, 5):
             self.fractional_contrib.append((da * (dig_data == i)).sum(dim='time').values / da.sum(dim='time').values)
 
-    def plot_fractional_contrib(self, axes=None):
+    def plot_fractional_contrib(self, axes=None, colorbar=True):
         """Plot the fractional contrib, as in KMM17, Fig 1."""
         nplots = len(self.fractional_contrib_thresh_mmpday)
         if axes is None:
@@ -215,7 +215,10 @@ class ASoPlite:
                 t = thresh[-1] * 24
                 ax.set_title(f'{self.time_mean} events >{t:.0f} mm day$^{{-1}}$')
 
-        plt.colorbar(im, ax=ax, orientation='horizontal', extend='min', label='fractional contribution')
+        if colorbar:
+            plt.colorbar(im, ax=axes, orientation='horizontal', extend='min', label='fractional contribution')
+        # Return final im in case caller wants to plot colorbar.
+        return im
 
     def calc_precip_prob_matrix(self):
         """Calc the probability matrix, as in KMM17, Fig 2a."""
