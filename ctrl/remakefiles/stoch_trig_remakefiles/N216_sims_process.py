@@ -21,9 +21,9 @@ SIMDIR = DATADIR / 'UM_sims'
 N_ENS_MEM = 10
 
 EXPT_SIM = {
-    'ctrl': 'u-di727',
+    'Control': 'u-di727',
     'vanillaMCSP': 'u-di728',
-    'stochMCSP': 'u-dg135',
+    'STOCH-PRIME-MCSP': 'u-dg135',
 }
 
 
@@ -121,7 +121,7 @@ class RegridImergToN216(TaskRule):
             )
             for t in times
         }
-        inputs['pflux'] = N216ExtractCombinePrecip.rule_outputs('stochMCSP')['pflux']
+        inputs['pflux'] = N216ExtractCombinePrecip.rule_outputs('STOCH-PRIME-MCSP')['pflux']
 
         return inputs
 
@@ -375,7 +375,7 @@ class Calc_dRMSE(TaskRule):
 
 plot_sigmas = [0, 2, 4]
 def plot_spread_skill_ts(expt_dRMSE, expt_eRMSE, smooth=False, xlim='full', show_skill_minus_spread=False):
-    ntime = len(expt_eRMSE['ctrl'].time)
+    ntime = len(expt_eRMSE['Control'].time)
 
     fig, axes = plt.subplots(1, len(plot_sigmas), sharex=True, layout='constrained')
     fig.set_size_inches(20, 6)
@@ -581,7 +581,7 @@ class PlotAutocorr(TaskRule):
         plt.colorbar(im, ax=axes[1, -1])
 
         for ax, expt_ac in zip(axes[2, 2:], list(expts_ac.values())[1:]):
-            im = ax.pcolormesh(expt_ac.longitude, expt_ac.latitude, expt_ac.pflux_autocorr.mean(dim='ens_mem') - expts_ac['ctrl'].pflux_autocorr.mean(dim='ens_mem'), vmin=-.2, vmax=.2, cmap='bwr')
+            im = ax.pcolormesh(expt_ac.longitude, expt_ac.latitude, expt_ac.pflux_autocorr.mean(dim='ens_mem') - expts_ac['Control'].pflux_autocorr.mean(dim='ens_mem'), vmin=-.2, vmax=.2, cmap='bwr')
             # plt.colorbar(im, ax=ax)
             ax.coastlines()
 
@@ -589,7 +589,7 @@ class PlotAutocorr(TaskRule):
 
 
         ax = axes[3, 3]
-        im = ax.pcolormesh(expt_ac.longitude, expt_ac.latitude, expts_ac['vanillaMCSP'].pflux_autocorr.mean(dim='ens_mem') - expts_ac['stochMCSP'].pflux_autocorr.mean(dim='ens_mem'), vmin=-.2, vmax=.2, cmap='bwr')
+        im = ax.pcolormesh(expt_ac.longitude, expt_ac.latitude, expts_ac['vanillaMCSP'].pflux_autocorr.mean(dim='ens_mem') - expts_ac['STOCH-PRIME-MCSP'].pflux_autocorr.mean(dim='ens_mem'), vmin=-.2, vmax=.2, cmap='bwr')
         # plt.colorbar(im, ax=ax)
         ax.coastlines()
 

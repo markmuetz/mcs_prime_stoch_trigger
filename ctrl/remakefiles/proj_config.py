@@ -4,9 +4,9 @@ from remake import util
 
 
 PATHS = {
-    'datadir': Path('/gws/nopw/j04/mcs_prime/mmuetz/data/'),
-    'outdir': Path('/gws/nopw/j04/mcs_prime/mmuetz/data/mcs_prime_output'),
-    'figdir': Path('/gws/nopw/j04/mcs_prime/mmuetz/data/mcs_prime_figs/N216sims/prod'),
+    'datadir': Path('/gws/ssde/j25b/mcs_prime/mmuetz/data/'),
+    'outdir': Path('/gws/ssde/j25b/mcs_prime/mmuetz/data/mcs_prime_output'),
+    'figdir': Path('/gws/ssde/j25b/mcs_prime/mmuetz/data/mcs_prime_figs/N216sims/prod'),
     # Checking this dir causing proc to hang.
     # 'era5dir': Path('/does/not/exist'),
     'era5dir': Path('/badc/ecmwf-era5'),
@@ -17,9 +17,9 @@ SIMDIR = DATADIR / 'UM_sims'
 N_ENS_MEM = 10
 
 EXPT_SIM = {
-    'ctrl': 'u-di727',
-    'origMCSP': 'u-di728',
-    'stochMCSP': 'u-dg135',
+    'Control': 'u-di727',
+    'PRIME-MCSP': 'u-di728',
+    'STOCH-PRIME-MCSP': 'u-dg135',
 }
 
 CASES = [

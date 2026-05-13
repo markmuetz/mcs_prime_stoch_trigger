@@ -40,9 +40,9 @@ rmk = Remake(config=dict(slurm=slurm_config, content_checks=False))
 expt_var = [
     (e, v)
     for e, v in product(conf.EXPT_SIM, ['mcsp_calling_freq'])
-    if not (e == 'ctrl' and v == 'mcsp_calling_freq')
+    if not (e == 'Control' and v == 'mcsp_calling_freq')
 ]
-# expt_var.append(('stochMCSP', 'tcwv'))
+# expt_var.append(('STOCH-PRIME-MCSP', 'tcwv'))
 
 @dataclass
 class Settings:
@@ -691,7 +691,7 @@ def plot_summary_spread_error_ts(expt_dRMSE, expt_eRMSE, ens='full'):
 
 def plot_spread_error_ts(expt_dRMSE, expt_eRMSE, smooth=False, xlim='full', show_error_minus_spread=False, ens='full',
                          plot_sigmas=(0, 2, 4)):
-    ntime = len(expt_eRMSE['ctrl'].time)
+    ntime = len(expt_eRMSE['Control'].time)
 
     if len(plot_sigmas) == 3:
         fig, axes = plt.subplots(1, len(plot_sigmas), sharex=True, layout='constrained')
@@ -1046,7 +1046,7 @@ class PlotAutocorr(Rule):
                 expt_ac.longitude,
                 expt_ac.latitude,
                 expt_ac.pflux_autocorr.mean(dim='realization')
-                - expts_ac['ctrl'].pflux_autocorr.mean(dim='realization'),
+                - expts_ac['Control'].pflux_autocorr.mean(dim='realization'),
                 vmin=-0.2,
                 vmax=0.2,
                 cmap='bwr',
@@ -1059,8 +1059,8 @@ class PlotAutocorr(Rule):
         im = ax.pcolormesh(
             expt_ac.longitude,
             expt_ac.latitude,
-            expts_ac['origMCSP'].pflux_autocorr.mean(dim='realization')
-            - expts_ac['stochMCSP'].pflux_autocorr.mean(dim='realization'),
+            expts_ac['PRIME-MCSP'].pflux_autocorr.mean(dim='realization')
+            - expts_ac['STOCH-PRIME-MCSP'].pflux_autocorr.mean(dim='realization'),
             vmin=-0.2,
             vmax=0.2,
             cmap='bwr',
@@ -1174,7 +1174,7 @@ class CalcMCSPCallingFreqData(Rule):
     @staticmethod
     def rule_inputs(case):
         inputs = {}
-        for expt in ['origMCSP', 'stochMCSP']:
+        for expt in ['PRIME-MCSP', 'STOCH-PRIME-MCSP']:
             suite = conf.EXPT_SIM[expt]
             inputs[f'cf_{expt}'] = (
                 conf.SIMDIR / f'{suite}/share/cycle/{case}/engl/um/'
@@ -1195,17 +1195,17 @@ class CalcMCSPCallingFreqData(Rule):
         print(inputs, outputs, case)
         expt_precip = {}
         expt_cf = {}
-        for expt in ['origMCSP', 'stochMCSP']:
+        for expt in ['PRIME-MCSP', 'STOCH-PRIME-MCSP']:
             print(expt)
             expt_precip[expt] = xr.load_dataset(inputs[f'pflux_{expt}']).precipitation_flux
             expt_precip[expt].values *= 3600
             expt_precip[expt].attrs['units'] = 'mm h-1'
             expt_cf[expt] = xr.load_dataset(inputs[f'cf_{expt}']).m01s05i993
 
-        cfmean_origMCSP = expt_cf['origMCSP'].isel(realization=slice(1, 10)).mean(['realization', 'time'])
-        cfmean_stochMCSP = expt_cf['stochMCSP'].isel(realization=slice(1, 10)).mean(['realization', 'time'])
-        precipmean_origMCSP = expt_precip['origMCSP'].isel(realization=slice(1, 10)).mean(['realization', 'time'])
-        precipmean_stochMCSP = expt_precip['stochMCSP'].isel(realization=slice(1, 10)).mean(['realization', 'time'])
+        cfmean_origMCSP = expt_cf['PRIME-MCSP'].isel(realization=slice(1, 10)).mean(['realization', 'time'])
+        cfmean_stochMCSP = expt_cf['STOCH-PRIME-MCSP'].isel(realization=slice(1, 10)).mean(['realization', 'time'])
+        precipmean_origMCSP = expt_precip['PRIME-MCSP'].isel(realization=slice(1, 10)).mean(['realization', 'time'])
+        precipmean_stochMCSP = expt_precip['STOCH-PRIME-MCSP'].isel(realization=slice(1, 10)).mean(['realization', 'time'])
 
         ds = xr.Dataset()
         ds['cfmean_origMCSP'] = cfmean_origMCSP
@@ -1233,22 +1233,22 @@ class PlotMCSPCallingFreq(Rule):
         cfmean_origMCSP = ds['cfmean_origMCSP']
         cfmean_stochMCSP = ds['cfmean_stochMCSP']
         cfmeans = {
-            'origMCSP': cfmean_origMCSP,
-            'stochMCSP': cfmean_stochMCSP,
+            'PRIME-MCSP': cfmean_origMCSP,
+            'STOCH-PRIME-MCSP': cfmean_stochMCSP,
         }
 
         precipmean_origMCSP = ds['precipmean_origMCSP']
         precipmean_stochMCSP = ds['precipmean_stochMCSP']
         precipmeans = {
-            'origMCSP': precipmean_origMCSP,
-            'stochMCSP': precipmean_stochMCSP,
+            'PRIME-MCSP': precipmean_origMCSP,
+            'STOCH-PRIME-MCSP': precipmean_stochMCSP,
         }
 
         fig, axes = plt.subplots(
             2, 3, figsize=(25.5, 8), subplot_kw={'projection': ccrs.PlateCarree()}, layout='constrained'
         )
 
-        for ax, expt in zip(axes[:, 0], ['origMCSP', 'stochMCSP']):
+        for ax, expt in zip(axes[:, 0], ['PRIME-MCSP', 'STOCH-PRIME-MCSP']):
             precipmean = precipmeans[expt]
             ax.set_title(f'precip. {expt}')
             ax.coastlines()
@@ -1258,7 +1258,7 @@ class PlotMCSPCallingFreq(Rule):
             im = ax.pcolormesh(precipmean.longitude, precipmean.latitude, precipmean, norm=norm, cmap=cmap)
             plt.colorbar(im, ax=ax, label='precip. (mm h$^{-1}$)')
 
-        for ax, expt in zip(axes[:, 1], ['origMCSP', 'stochMCSP']):
+        for ax, expt in zip(axes[:, 1], ['PRIME-MCSP', 'STOCH-PRIME-MCSP']):
             cfmean = cfmeans[expt]
             precipmean = precipmeans[expt]
             pcc = scipy.stats.pearsonr(cfmean.values.flatten(), precipmean.values.flatten())[0]
@@ -1528,7 +1528,7 @@ class Calc_geopot_eRMSE(Rule):
 def plot_geopot_spread_error_ts(
     expt_dRMSE, expt_eRMSE, smooth=False, xlim='full', ens='full'
 ):
-    ntime = len(expt_eRMSE['ctrl'].time)
+    ntime = len(expt_eRMSE['Control'].time)
 
     fig, ax = plt.subplots(layout='constrained')
     fig.set_size_inches(8, 6)
