@@ -20,14 +20,15 @@ slurm_config = {'account': 'mcs_prime', 'partition': 'standard', 'qos': 'standar
 rmk = Remake(config=dict(slurm=slurm_config, content_checks=False))
 
 REGIONS = {
+    # These are the regions used in the paper.
     'eq_warm_pool': (60, 160, -10, 10),
-    'eq_band': (0, 360, -10, 10),
     'tropics': (0, 360, -30, 30),
-    'indian_ocean': (50, 100, -10, 10),
-    'india': (70, 90, 10, 30),
-    'west_pacific': (110, 170, 5, 30),
-    'china': (100, 120, 22, 32),
-    'us': (245, 275, 32, 48),
+    # 'eq_band': (0, 360, -10, 10),
+    # 'indian_ocean': (50, 100, -10, 10),
+    # 'india': (70, 90, 10, 30),
+    # 'west_pacific': (110, 170, 5, 30),
+    # 'china': (100, 120, 22, 32),
+    # 'us': (245, 275, 32, 48),
 }
 
 
@@ -79,8 +80,11 @@ class PlotRegions(Rule):
         plt.savefig(outputs['asop_regs'])
 
 
-def open_precip(inputs, expt, region, coarsen_time):
-    """Open precip DataArray, for given expt, region, and apply coarsening."""
+def open_precip(inputs, expt, region, coarsen_time, ensemble_member=1):
+    """Open precip DataArray, for given expt, region, and apply coarsening.
+
+    Defaults to ensemble_member/realization 1 (not 0, which is deterministic).
+    """
     reg_extent = REGIONS[region]
     lat_lon_sel = dict(longitude=slice(reg_extent[0], reg_extent[1]), latitude=slice(reg_extent[2], reg_extent[3]))
 
@@ -89,8 +93,7 @@ def open_precip(inputs, expt, region, coarsen_time):
     if expt.lower() == 'imerg':
         da_precip = xr.open_mfdataset(precip_inputs_values).__xarray_dataarray_variable__.sel(**lat_lon_sel)
     else:
-        # Realization 1 (not 0, which is deterministic).
-        da_precip = xr.open_mfdataset(precip_inputs_values).precipitation_flux.sel(realization=1, **lat_lon_sel)
+        da_precip = xr.open_mfdataset(precip_inputs_values).precipitation_flux.sel(realization=ensemble_member, **lat_lon_sel)
         da_precip.values *= 3600  # convert to mm h-1
         da_precip.attrs['units'] = 'mm h-1'
 
@@ -103,14 +106,20 @@ class ASoPN216regional(Rule):
     """Use the ASoPlite class to calc the ASoP info for each region."""
 
     rule_matrix = {
+        # These are analysis used in the paper.
         'expt': ['imerg', 'Control', 'PRIME-MCSP', 'STOCH-PRIME-MCSP'],
-        'case': conf.CASES + ['all_cases'],
-        'region': list(REGIONS),
-        'coarsen_time': ['hourly', '3-hourly'],
+        'region': ['tropics'],
+        'case': ['all_cases'],
+        'coarsen_time': ['3-hourly'],
+        'ensemble_member': [1, 2, 3, 4, 5, 6, 7, 8, 9],
+        # 'case': conf.CASES + ['all_cases'],
+        # 'region': list(REGIONS),
+        # 'coarsen_time': ['hourly', '3-hourly'],
+        # 'ensemble_member': [1, 2],
     }
 
     @staticmethod
-    def rule_inputs(expt, case, region, coarsen_time):
+    def rule_inputs(expt, case, region, coarsen_time, ensemble_member):
         inputs = {}
         if case == 'all_cases':
             cases = conf.CASES
@@ -131,14 +140,15 @@ class ASoPN216regional(Rule):
         return inputs
 
     @staticmethod
-    def rule_outputs(expt, case, region, coarsen_time):
-        return {'output': conf.PATHS['outdir'] / 'ASoP' / expt / case / region / f'asop.{expt}.{case}.{region}.{coarsen_time}.nc'}
+    def rule_outputs(expt, case, region, coarsen_time, ensemble_member):
+        basedir = conf.PATHS['outdir'] / 'ASoP' / expt / case / region / f'em{ensemble_member}'
+        return {'output':  basedir / f'asop.{expt}.{case}.{region}.{coarsen_time}.nc'}
 
     @staticmethod
-    def rule_run(inputs, outputs, expt, case, region, coarsen_time):
-        print('Running', expt, case, region, coarsen_time)
+    def rule_run(inputs, outputs, expt, case, region, coarsen_time, ensemble_member):
+        print('Running', expt, case, region, coarsen_time, ensemble_member)
 
-        da_precip = open_precip(inputs, expt, region, coarsen_time)
+        da_precip = open_precip(inputs, expt, region, coarsen_time, ensemble_member)
         da_precip = da_precip.load()
 
         asop = ASoPlite(da_precip, coarsen_time)
@@ -149,36 +159,41 @@ class ASoPN216regional(Rule):
 class PlotASoPN216regional(Rule):
     """Plot the regional ASoP data using ASoPlite."""
     rule_matrix = {
-        'region': list(REGIONS),
-        'case': conf.CASES + ['all_cases'],
-        'coarsen_time': ['hourly', '3-hourly'],
+        # These are analysis used in the paper.
+        'region': ['tropics'],
+        'case': ['all_cases'],
+        'coarsen_time': ['3-hourly'],
+        'ensemble_member': [1, 2, 3, 4, 5, 6, 7, 8, 9],
+        # 'region': list(REGIONS),
+        # 'case': conf.CASES + ['all_cases'],
+        # 'coarsen_time': ['hourly', '3-hourly'],
     }
 
     @staticmethod
-    def rule_inputs(region, case, coarsen_time):
+    def rule_inputs(region, case, coarsen_time, ensemble_member):
         inputs = {}
         for expt in ['imerg', 'Control', 'PRIME-MCSP', 'STOCH-PRIME-MCSP']:
-            inputs.update(ASoPN216regional.rule_inputs(expt, case, region, coarsen_time))
-            inputs[f'asop_{expt}'] = ASoPN216regional.rule_outputs(expt, case, region, coarsen_time)['output']
+            inputs.update(ASoPN216regional.rule_inputs(expt, case, region, coarsen_time, ensemble_member))
+            inputs[f'asop_{expt}'] = ASoPN216regional.rule_outputs(expt, case, region, coarsen_time, ensemble_member)['output']
         return inputs
 
     @staticmethod
-    def rule_outputs(region, case, coarsen_time):
+    def rule_outputs(region, case, coarsen_time, ensemble_member):
         fig_asop_dir = conf.PATHS['figdir'] / 'ASoP'
+        basedir = fig_asop_dir / case / region / f'em{ensemble_member}'
         return {
             # This is a 15 MB file if I use .pdf.
-            'fractional_contrib': fig_asop_dir / case / region / f'asop.fractional_contrib.{region}.{case}.{coarsen_time}.png',
-            'precip_prob_matrix': fig_asop_dir / case / region / f'asop.precip_prob_matrix.{region}.{case}.{coarsen_time}.pdf',
-            '7x7_spat_corr': fig_asop_dir / case / region / f'asop.7x7_spat_corr.{region}.{case}.{coarsen_time}.pdf',
-            '7x7_spat_temp_corr': fig_asop_dir / case / region / f'asop.7x7_spat_temp_corr.{region}.{case}.{coarsen_time}.pdf',
+            'fractional_contrib': basedir / f'asop.fractional_contrib.{region}.{case}.{coarsen_time}.em{ensemble_member}.png',
+            'precip_prob_matrix': basedir / f'asop.precip_prob_matrix.{region}.{case}.{coarsen_time}.em{ensemble_member}.pdf',
+            '7x7_spat_corr': basedir / f'asop.7x7_spat_corr.{region}.{case}.{coarsen_time}.em{ensemble_member}.pdf',
+            '7x7_spat_temp_corr': basedir / f'asop.7x7_spat_temp_corr.{region}.{case}.{coarsen_time}.em{ensemble_member}.pdf',
         }
 
     @staticmethod
-    def rule_run(inputs, outputs, region, case, coarsen_time):
-        print('oh hai')
+    def rule_run(inputs, outputs, region, case, coarsen_time, ensemble_member):
         asops = {}
         for expt in ['imerg', 'Control', 'PRIME-MCSP', 'STOCH-PRIME-MCSP']:
-            da_precip = open_precip(inputs, expt, region, coarsen_time)
+            da_precip = open_precip(inputs, expt, region, coarsen_time, ensemble_member)
             asops[expt] = ASoPlite(da_precip, coarsen_time)
             asops[expt].load_ds(xr.open_dataset(inputs[f'asop_{expt}']))
 
