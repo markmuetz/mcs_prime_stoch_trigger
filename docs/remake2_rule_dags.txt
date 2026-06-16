@@ -1,0 +1,63 @@
+============================================================
+# N216_ens_analysis.py: 19 rules, 18 rule-edges
+## nodes
+  CalcMCSPCallingFreqData
+  CalcTCWV
+  CalcTotalPrecip
+  Calc_dRMSE
+  Calc_eRMSE
+  Calc_geopot_dRMSE
+  Calc_geopot_eRMSE
+  FirstLookPlotERA5_500hPa_geopotential
+  GuassianFilterExpt
+  GuassianFilterN216Imerg
+  PlotAllCasesGeopotSpreadError
+  PlotAllCasesSpreadError
+  PlotGeopotSpreadError
+  PlotMCSPCallingFreq
+  PlotPrecipSnapshots
+  PlotSpreadError
+  PlotTotalPrecip
+  RegridERA5ToN216
+  RegridImergToN216
+## edges (upstream -> downstream)
+  CalcMCSPCallingFreqData -> PlotMCSPCallingFreq
+  CalcTotalPrecip -> PlotTotalPrecip
+  Calc_dRMSE -> PlotAllCasesSpreadError
+  Calc_dRMSE -> PlotSpreadError
+  Calc_eRMSE -> PlotAllCasesSpreadError
+  Calc_eRMSE -> PlotSpreadError
+  Calc_geopot_dRMSE -> PlotAllCasesGeopotSpreadError
+  Calc_geopot_dRMSE -> PlotGeopotSpreadError
+  Calc_geopot_eRMSE -> PlotAllCasesGeopotSpreadError
+  Calc_geopot_eRMSE -> PlotGeopotSpreadError
+  GuassianFilterExpt -> Calc_dRMSE
+  GuassianFilterExpt -> Calc_eRMSE
+  GuassianFilterN216Imerg -> Calc_eRMSE
+  RegridERA5ToN216 -> CalcTCWV
+  RegridERA5ToN216 -> Calc_geopot_eRMSE
+  RegridImergToN216 -> CalcTotalPrecip
+  RegridImergToN216 -> GuassianFilterN216Imerg
+  RegridImergToN216 -> PlotPrecipSnapshots
+## topological order
+  CalcMCSPCallingFreqData -> Calc_geopot_dRMSE -> FirstLookPlotERA5_500hPa_geopotential -> GuassianFilterExpt -> RegridERA5ToN216 -> RegridImergToN216 -> PlotMCSPCallingFreq -> Calc_dRMSE -> CalcTCWV -> Calc_geopot_eRMSE -> CalcTotalPrecip -> GuassianFilterN216Imerg -> PlotPrecipSnapshots -> PlotAllCasesGeopotSpreadError -> PlotGeopotSpreadError -> PlotTotalPrecip -> Calc_eRMSE -> PlotAllCasesSpreadError -> PlotSpreadError
+
+============================================================
+# ASoP_analysis.py: 3 rules, 1 rule-edges
+## nodes
+  ASoPN216regional
+  PlotASoPN216regional
+  PlotRegions
+## edges (upstream -> downstream)
+  ASoPN216regional -> PlotASoPN216regional
+## topological order
+  ASoPN216regional -> PlotRegions -> PlotASoPN216regional
+
+============================================================
+# download_gpm_imerg.py: 1 rules, 0 rule-edges
+## nodes
+  GpmImerg30MinDownload
+## edges (upstream -> downstream)
+## topological order
+  GpmImerg30MinDownload
+
