@@ -552,7 +552,7 @@ def guassian_filter_expt_inputs(expt, case):
 
 def guassian_filter_expt_outputs(expt, case):
     suite = conf.EXPT_SIM[expt]
-    outputs = {'pflux_filtered': conf.SIMDIR / f'{suite}/processed/{expt}/{case}/engla_pa.filtered_precip.nc'}
+    outputs = {'pflux_filtered': conf.SIMPROC_DIR / f'{suite}/processed/{expt}/{case}/engla_pa.filtered_precip.nc'}
     return outputs
 
 
@@ -604,7 +604,7 @@ def calc_eRMSE_inputs(expt, case, regrid_method):
 def calc_eRMSE_outputs(expt, case, regrid_method):
     suite = conf.EXPT_SIM[expt]
     outputs = {
-        'eRMSE': conf.SIMDIR / f'{suite}/processed/{expt}/{case}/engla_pa.filtered_precip.eRMSE.{regrid_method}.nc'
+        'eRMSE': conf.SIMPROC_DIR / f'{suite}/processed/{expt}/{case}/engla_pa.filtered_precip.eRMSE.{regrid_method}.nc'
     }
     return outputs
 
@@ -657,7 +657,7 @@ def calc_dRMSE_inputs(expt, case):
 
 def calc_dRMSE_outputs(expt, case):
     suite = conf.EXPT_SIM[expt]
-    outputs = {'dRMSE': conf.SIMDIR / f'{suite}/processed/{expt}/{case}/engla_pa.filtered_precip.dRMSE.nc'}
+    outputs = {'dRMSE': conf.SIMPROC_DIR / f'{suite}/processed/{expt}/{case}/engla_pa.filtered_precip.dRMSE.nc'}
     return outputs
 
 
@@ -989,7 +989,7 @@ def calc_autocorr_expt_inputs(expt, case):
 
 def calc_autocorr_expt_outputs(expt, case):
     suite = conf.EXPT_SIM[expt]
-    outputs = {'pflux_autocorr': conf.SIMDIR / f'{suite}/processed/{expt}/{case}/engla_pa.autocorr_precip.nc'}
+    outputs = {'pflux_autocorr': conf.SIMPROC_DIR / f'{suite}/processed/{expt}/{case}/engla_pa.autocorr_precip.nc'}
     return outputs
 
 
@@ -1449,7 +1449,7 @@ def calc_geopot_dRMSE_inputs(expt, case, domain):
 
 def calc_geopot_dRMSE_outputs(expt, case, domain):
     suite = conf.EXPT_SIM[expt]
-    outputs = {'dRMSE': conf.SIMDIR / f'{suite}/processed/{expt}/{case}/engla_pb.geopot.{domain}.dRMSE.nc'}
+    outputs = {'dRMSE': conf.SIMPROC_DIR / f'{suite}/processed/{expt}/{case}/engla_pb.geopot.{domain}.dRMSE.nc'}
     return outputs
 
 
@@ -1515,7 +1515,7 @@ def calc_geopot_eRMSE_inputs(expt, case, domain):
 
 def calc_geopot_eRMSE_outputs(expt, case, domain):
     suite = conf.EXPT_SIM[expt]
-    outputs = {'eRMSE': conf.SIMDIR / f'{suite}/processed/{expt}/{case}/engla_pb.geopot.{domain}.eRMSE.nc'}
+    outputs = {'eRMSE': conf.SIMPROC_DIR / f'{suite}/processed/{expt}/{case}/engla_pb.geopot.{domain}.eRMSE.nc'}
     return outputs
 
 

@@ -3,11 +3,18 @@ from pathlib import Path
 from remake import util
 
 
-# remake3 migration: outputs are redirected to a parallel *_remake3 tree so
-# the existing remake2 outputs survive for the equivalence diff. Inputs
-# (datadir, era5dir) stay shared - remake3 reads the same raw data.
+# remake3 migration: outputs are redirected to a parallel tree (tagged by
+# REMAKE3_RUN_TAG) so the existing remake2 outputs survive for the
+# equivalence diff. Inputs (datadir, era5dir, SIMDIR raw sim files) stay
+# shared - remake3 reads the same raw data.
 # Flip this to False to write to the original (remake2) locations.
 REMAKE3_EQUIVALENCE_TEST = True
+# Bump this for a fresh-from-scratch equivalence run: it points outdir,
+# figdir and the processed-sim dir at a brand-new empty tree, so every task
+# reruns and nothing is adopted from a previous run. Covers the {suite}/
+# processed/... outputs too (previously those landed in the shared SIMDIR
+# and were adopted / overwrote remake2 reference data).
+REMAKE3_RUN_TAG = 'remake3_run2'
 
 PATHS = {
     'datadir': Path('/gws/ssde/j25b/mcs_prime/mmuetz/data/'),
@@ -19,11 +26,19 @@ PATHS = {
 }
 
 if REMAKE3_EQUIVALENCE_TEST:
-    PATHS['outdir'] = Path('/gws/ssde/j25b/mcs_prime/mmuetz/data/mcs_prime_output_remake3')
-    PATHS['figdir'] = Path('/gws/ssde/j25b/mcs_prime/mmuetz/data/mcs_prime_figs/N216sims/prod_remake3')
+    PATHS['outdir'] = Path(f'/gws/ssde/j25b/mcs_prime/mmuetz/data/mcs_prime_output_{REMAKE3_RUN_TAG}')
+    PATHS['figdir'] = Path(f'/gws/ssde/j25b/mcs_prime/mmuetz/data/mcs_prime_figs/N216sims/prod_{REMAKE3_RUN_TAG}')
 
 DATADIR = PATHS['datadir']
 SIMDIR = DATADIR / 'UM_sims'
+# Processed sim outputs ({suite}/processed/... files) go under SIMPROC_DIR,
+# kept separate from SIMDIR (which holds the shared raw {suite}/share/cycle
+# inputs) so the equivalence run never reads/overwrites the original
+# remake2 processed data.
+if REMAKE3_EQUIVALENCE_TEST:
+    SIMPROC_DIR = DATADIR / f'UM_sims_{REMAKE3_RUN_TAG}'
+else:
+    SIMPROC_DIR = SIMDIR
 N_ENS_MEM = 10
 
 EXPT_SIM = {
