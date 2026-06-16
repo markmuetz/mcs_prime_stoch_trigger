@@ -3,6 +3,12 @@ from pathlib import Path
 from remake import util
 
 
+# remake3 migration: outputs are redirected to a parallel *_remake3 tree so
+# the existing remake2 outputs survive for the equivalence diff. Inputs
+# (datadir, era5dir) stay shared - remake3 reads the same raw data.
+# Flip this to False to write to the original (remake2) locations.
+REMAKE3_EQUIVALENCE_TEST = True
+
 PATHS = {
     'datadir': Path('/gws/ssde/j25b/mcs_prime/mmuetz/data/'),
     'outdir': Path('/gws/ssde/j25b/mcs_prime/mmuetz/data/mcs_prime_output'),
@@ -11,6 +17,10 @@ PATHS = {
     # 'era5dir': Path('/does/not/exist'),
     'era5dir': Path('/badc/ecmwf-era5'),
 }
+
+if REMAKE3_EQUIVALENCE_TEST:
+    PATHS['outdir'] = Path('/gws/ssde/j25b/mcs_prime/mmuetz/data/mcs_prime_output_remake3')
+    PATHS['figdir'] = Path('/gws/ssde/j25b/mcs_prime/mmuetz/data/mcs_prime_figs/N216sims/prod_remake3')
 
 DATADIR = PATHS['datadir']
 SIMDIR = DATADIR / 'UM_sims'
