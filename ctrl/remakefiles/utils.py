@@ -6,7 +6,6 @@ import traceback
 import pandas as pd
 
 import remake
-from remake import util
 
 
 def to_netcdf_tmp_then_copy(ds, outpath, encoding=None):
@@ -23,6 +22,9 @@ def to_netcdf_tmp_then_copy(ds, outpath, encoding=None):
     """
     if encoding is None:
         encoding = {}
+    # remake3 passes outputs['x'] as a path-like token, not a Path - wrap it
+    # so the Path methods below (is_absolute/parts/parent) work.
+    outpath = Path(outpath)
     tmpdir = Path('/work/scratch-nopw2/mmuetz')
     assert outpath.is_absolute()
     tmppath = tmpdir / Path(*outpath.parts[1:])
@@ -35,7 +37,8 @@ def to_netcdf_tmp_then_copy(ds, outpath, encoding=None):
     # calling_obj = frame.f_locals['self']
     # calling_obj_doc = calling_obj.__doc__
     # calling_class_name = calling_obj.__class__.__name__
-    output_path_actual = util.tmp_to_actual_path(outpath)
+    # remake3: outpath is already the real output path (no tmp->actual map).
+    output_path_actual = outpath
 
     nodename = socket.gethostname()
     remake_version = remake.__version__
