@@ -13,7 +13,7 @@ from timeit import default_timer as timer
 import pandas as pd
 import requests
 
-from remake import Remake, Rule
+from remake import Remake, rule
 
 import proj_config as conf
 
@@ -41,7 +41,7 @@ for case in conf.CASES:
     date_range_kwargs = dict(start=start_date, end=end_date, freq='30min')
     DATES_KWARGS.append(date_range_kwargs)
 
-slurm_config = {'account': 'short4hr', 'queue': 'short-serial-4hr', 'mem': 64000}
+slurm_config = {'account': 'mcs_prime', 'partition': 'standard', 'qos': 'standard', 'mem': 64000}
 downloader = Remake(config=dict(slurm=slurm_config))
 
 
@@ -117,49 +117,57 @@ def gen_dates_urls_filenames(filename_tpl, url_tpl, dates):
         curr_date = next_date
 
 
-class GpmImerg30MinDownload(Rule):
-    rule_inputs = {}
+def gpm_imerg_30min_download_outputs(idx):
+    date_range_kwargs = DATES_KWARGS[idx]
+    dates = pd.date_range(**date_range_kwargs)
+    s = dates[0]
+    e = dates[-1]
+    return {'output_filenames': str(IMERG_FINAL_30MIN_DIR / f'{s.year}' / f'download.{s}-{e}.done')}
 
-    @staticmethod
-    def rule_outputs(idx):
-        date_range_kwargs = DATES_KWARGS[idx]
-        dates = pd.date_range(**date_range_kwargs)
-        s = dates[0]
-        e = dates[-1]
-        return {'output_filenames': str(IMERG_FINAL_30MIN_DIR / f'{s.year}' / f'download.{s}-{e}.done')}
 
-    # rule_matrix = {'date_range_kwargs': DATES_KWARGS}
-    rule_matrix = {'idx': range(len(DATES_KWARGS))}
+@rule(
+    outputs=gpm_imerg_30min_download_outputs,
+    matrix={'idx': list(range(len(DATES_KWARGS)))},
+    uses={
+        'DATES_KWARGS': DATES_KWARGS,
+        'FINAL_30MIN_FILENAME_TPL': FINAL_30MIN_FILENAME_TPL,
+        'FINAL_30MIN_URL_TPL': FINAL_30MIN_URL_TPL,
+        'gen_dates_urls_filenames': gen_dates_urls_filenames,
+        'get_from_gpm': get_from_gpm,
+    },
+)
+def gpm_imerg_30min_download(outputs, idx):
+    date_range_kwargs = DATES_KWARGS[idx]
+    print(date_range_kwargs)
+    dates = pd.date_range(**date_range_kwargs)
 
-    @staticmethod
-    def rule_run(inputs, outputs, idx):
-        date_range_kwargs = DATES_KWARGS[idx]
-        print(date_range_kwargs)
-        dates = pd.date_range(**date_range_kwargs)
+    output_filenames = Path(outputs['output_filenames'])
+    actual_outputs = {}
+    filename_tpl = FINAL_30MIN_FILENAME_TPL
+    url_tpl = FINAL_30MIN_URL_TPL
+    dates_urls_filenames = list(gen_dates_urls_filenames(filename_tpl, url_tpl, dates))
+    all_filenames = []
+    for i, (date, url, filename) in enumerate(dates_urls_filenames):
+        output_filename = output_filenames.parent / f'{date.month:02d}/{date.day:02d}' / filename
+        output_filename.parent.mkdir(exist_ok=True, parents=True)
+        # output_filename = Path(IMERG_FINAL_DIR / date.fmt_year() / filename)
+        if not output_filename.exists():
+            actual_outputs[url] = output_filename
+        all_filenames.append(str(output_filename))
 
-        actual_outputs = {}
-        filename_tpl = FINAL_30MIN_FILENAME_TPL
-        url_tpl = FINAL_30MIN_URL_TPL
-        dates_urls_filenames = list(gen_dates_urls_filenames(filename_tpl, url_tpl, dates))
-        all_filenames = []
-        for i, (date, url, filename) in enumerate(dates_urls_filenames):
-            output_filename = outputs['output_filenames'].parent / f'{date.month:02d}/{date.day:02d}' / filename
-            output_filename.parent.mkdir(exist_ok=True, parents=True)
-            # output_filename = Path(IMERG_FINAL_DIR / date.fmt_year() / filename)
-            if not output_filename.exists():
-                actual_outputs[url] = output_filename
-            all_filenames.append(str(output_filename))
+    for url, output_filename in actual_outputs.items():
+        print(url, output_filename)
+        start = timer()
+        tmp_filename = Path(output_filename.parent / ('.tmp.gpm_download.' + output_filename.name))
+        tmp_filename.parent.mkdir(exist_ok=True)
+        get_from_gpm(url, tmp_filename)
+        assert tmp_filename.exists()
+        tmp_filename.rename(output_filename)
+        print(f'-> downloaded in {(timer() - start):.2f}s')
+    else:
+        print(f'No files to download for {date_range_kwargs}')
 
-        for url, output_filename in actual_outputs.items():
-            print(url, output_filename)
-            start = timer()
-            tmp_filename = Path(output_filename.parent / ('.tmp.gpm_download.' + output_filename.name))
-            tmp_filename.parent.mkdir(exist_ok=True)
-            get_from_gpm(url, tmp_filename)
-            assert tmp_filename.exists()
-            tmp_filename.rename(output_filename)
-            print(f'-> downloaded in {(timer() - start):.2f}s')
-        else:
-            print(f'No files to download for {date_range_kwargs}')
+    output_filenames.write_text('\n'.join(all_filenames) + '\n')
 
-        outputs['output_filenames'].write_text('\n'.join(all_filenames) + '\n')
+
+downloader.rules_from_current_module()
