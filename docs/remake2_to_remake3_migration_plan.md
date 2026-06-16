@@ -24,7 +24,31 @@ DAG in `docs/remake2_rule_dags.txt`), declare module globals via `uses=`.
 
 ## Environment notes
 
-- **remake3 CLI** is not on `PATH`; use `~/projects/remake3/.venv/bin/remake`.
+- **The remake3 `.venv` lacks the scientific stack** (`requests`, `pandas`,
+  `xarray`, `cartopy`, `xesmf`, `scipy`, `cdsapi`, …), so the remakefiles
+  can't even import under `~/projects/remake3/.venv/bin/remake`. Validate
+  instead by running **remake3's code under the `upflo_env` conda env**
+  (which has the full stack), shadowing the installed remake2 via
+  `PYTHONPATH`:
+
+  ```bash
+  cd ctrl/remakefiles
+  PYTHONPATH=~/projects/remake3/src \
+    ~/miniforge3/envs/upflo_env/bin/python -m remake.remake_cmd <cmd> <file> [...]
+  # e.g. ... -m remake.remake_cmd info download_gpm_imerg.py
+  #      ... -m remake.remake_cmd run  download_gpm_imerg.py -n
+  ```
+
+  This picks up remake3 (0.8.0a0) from source. **Open question for
+  deployment:** the real equivalence run needs remake3 installed *into* an
+  env with the science stack (e.g. `pip install -e ~/projects/remake3` into
+  a dedicated env, or into `upflo_env` — but that shadows remake2 there).
+- **Fresh `.remake/` required.** remake3 cannot read the remake2 metadata
+  DB (`sqlite3 ... no such column: task.uses_hash`). The shared remake2
+  store was moved aside to `.remake.remake2_bak/`; remake3 creates its own
+  `.remake/`. (`.remake/` is gitignored.)
+- **remake2** (DAG dump / cross-check) lives in `upflo_env` directly:
+  `~/miniforge3/envs/upflo_env/bin/python` (remake 0.7.0).
 - **remake2** (for the DAG dump / cross-checking) is in the `upflo_env`
   conda env: `~/miniforge3/envs/upflo_env/bin/python` (remake 0.7.0).
 - **Drop the `mcs_prime` package dependency.** `download_era5.py` imports
@@ -128,6 +152,13 @@ smallest → largest so the translation pattern is validated before the
   entry. The `rule_inputs = CalcTotalPrecip.rule_outputs` shorthand (3
   sites: lines 431, 1120, 1215 — note 1120 is `PlotTCWV`, a disabled rule)
   → `inputs=calc_total_precip.outputs`.
+- **Rule function signature contract** (stricter than remake2, validated at
+  decoration): `def fn([inputs,] [outputs,] <matrix keys>)`. Unlike
+  remake2's always-`(inputs, outputs, ...)`, in remake3 you **omit the
+  `inputs` param when there's no `inputs=`** (and `outputs` when there's no
+  `outputs=`). Also: an empty `inputs={}`/`outputs={}` is rejected as
+  ambiguous — omit the argument entirely. The trailing params must be
+  exactly the matrix keys.
 - **`uses=` for module globals** each rule body references: `rmse`,
   `settings`/`Settings` (dataclass — supported in `uses=`), the `plot_*`
   helpers, `REGIONS`, `open_precip`, `client`, `req_var_names`,
