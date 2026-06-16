@@ -237,6 +237,48 @@ Because outputs are redirected to an empty `*_remake3` tree, the plan
 
 Keep each remake2 file until its equivalence diff passes.
 
+## Discussion point: cross-remakefile dependencies
+
+**The remakefiles are not independent — think about the dependencies
+*between* them before running, not just within each file.** remake tracks
+the DAG *within* a single remakefile (via `depends_on`); it has no notion of
+one remakefile consuming another's outputs. Those cross-file links are real
+but invisible to the planner, and the output redirection makes them bite.
+
+Concrete case hit during the first ASoP run: `asop_n216regional`'s `imerg`
+input *is* the output of `regrid_imerg_to_n216` in `N216_ens_analysis.py`
+(both reach it through `outdir`). With `outdir` redirected to `*_remake3`,
+the ASoP `expt=imerg` tasks looked for that intermediate in the new tree,
+where nothing had regenerated it yet → `FileNotFoundError`. (The
+`Control`/`PRIME-MCSP`/`STOCH-PRIME-MCSP` ASoP tasks were fine: their inputs
+are raw sim files in the shared `SIMDIR`.) Fix is ordering, not code: run
+the producing rule into `_remake3` first
+(`run N216_ens_analysis.py -Q 'rule == "regrid_imerg_to_n216"'`), then ASoP.
+
+Implications for the equivalence run:
+- **There is a run order across files**, roughly: produce the shared
+  processed intermediates in `N216_ens_analysis.py` (the `regrid_*` stages,
+  and anything else another file reads from `outdir`) *before* the files
+  that consume them (`ASoP_analysis.py`). A whole-tree run that goes
+  file-by-file in the wrong order will throw missing-input errors that look
+  like failures but are just ordering.
+- **Map the cross-file edges explicitly** before the full run: grep each
+  file for reads of `conf.PATHS['outdir']` that another file writes. Known
+  so far: ASoP(imerg) ← N216.regrid_imerg_to_n216. Re-check whether ASoP or
+  others also consume regridded ERA5 / other N216 products.
+- **Decide the boundary deliberately.** Two defensible stances:
+  (a) *full regeneration* — run everything into `_remake3` in dependency
+  order, so the equivalence test covers the whole chain end to end (cleanest,
+  but you pay to recompute heavy upstream stages like the regrids); or
+  (b) *treat cross-file processed inputs as fixed* — point only those
+  specific inputs back at the original (remake2) `outdir` so each file can be
+  tested against frozen upstream data. (a) is the stronger equivalence
+  check; (b) is faster for iterating on a single downstream file. Pick one
+  and note it, rather than discovering the ordering ad hoc per failure.
+- Longer term, if these pipelines stay coupled, consider whether the
+  shared-intermediate rules belong in one remakefile (so the DAG is tracked)
+  rather than duplicated/referenced across two.
+
 ## Out of scope (this branch)
 
 `stoch_trig_remakefiles/*` (Style-B `TaskRule`, 11-rule
