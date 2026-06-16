@@ -12,6 +12,29 @@ Follows the workflow in the remake3 skill's `remake2_to_remake3.md`:
 translate by hand, wire `depends_on` explicitly (against the ground-truth
 DAG in `docs/remake2_rule_dags.txt`), declare module globals via `uses=`.
 
+## Status: all 6 production files translated (validated under remake3 `-n`)
+
+`proj_config.py`, `utils.py`, `download_gpm_imerg.py`, `download_era5.py`,
+`ASoP_analysis.py`, `N216_ens_analysis.py` are all done: they import
+cleanly, scope-check clean, expand to the expected task counts, and (for
+`ASoP`/`N216`) the remake3 rule DAG reproduces the remake2 `rule_dg`
+exactly. **Remaining work is the actual equivalence run + diff** (run each
+file to completion against the `*_remake3` tree, compare to the remake2
+outputs — see Acceptance test) and the deployment-env decision.
+
+Two further remake3 constraints found during the `N216` translation:
+- **Task kwargs must be hashable.** The `plot_kwargs` matrix entries were
+  dicts (fine in remake2); remake3's planner does
+  `frozenset(task.kwargs.items())` → `TypeError: unhashable type: 'dict'`.
+  Fixed with a `_hashable()` helper storing each as `tuple(d.items())`,
+  rebuilt via `dict()` in consumers (output paths unchanged).
+- **Scope exemption is stdlib-vs-not, not module-vs-name.** `Path`
+  (pathlib), `product` (itertools) etc. are exempt despite being
+  `from x import` names, because their `__module__` is stdlib. Only
+  remakefile-defined names (`settings`, `rmse`, the `plot_*_ts` helpers)
+  and third-party/local from-imported classes (`ASoPlite`, `Line2D`) need
+  `uses=`.
+
 ## Done already on this branch
 
 - Deleted `ctrl/remakefiles/dev/` (scratch/experimental Style-B files).
