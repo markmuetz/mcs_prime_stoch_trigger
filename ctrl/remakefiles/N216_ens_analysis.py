@@ -65,12 +65,46 @@ class Settings:
 settings = Settings()
 
 
-def _hashable(plot_kwargs_dicts):
-    """remake3 task kwargs must be hashable; a dict isn't. Store each
-    plot_kwargs as a tuple of items (hashable, JSON-serialisable, preserves
-    order) - consumers rebuild it with dict(). remake2 allowed dict-valued
-    matrix entries directly."""
-    return [tuple(d.items()) for d in plot_kwargs_dicts]
+def _kwstr(d):
+    """Canonical string key for a plot_kwargs dict - also the token used in
+    output filenames. A plain str is JSON-stable, so it survives the SLURM
+    job-spec round-trip unchanged. (tuple(d.items()) does NOT: JSON has no
+    tuples, so on the compute node it comes back as nested lists, which
+    changes the task key AND any output path built from it - e.g.
+    xlim=(0,20) became xlim=[0,20], so sidecar results recorded under keys
+    the planner never looked up and plot outputs landed under the wrong
+    name. remake2 allowed dict-valued matrix entries directly.)"""
+    return '-'.join(f'{k}={v}' for k, v in d.items()).replace(' ', '')
+
+
+def _kwmap(plot_kwargs_dicts):
+    """{ _kwstr(d): d } - matrix uses the str keys; rule bodies look the
+    dict back up (the map is passed via uses=)."""
+    return {_kwstr(d): d for d in plot_kwargs_dicts}
+
+
+# plot_kwargs variants per rule (str-keyed so they are JSON-stable matrix
+# values). plot_spread_error and plot_all_cases_spread_error share one set.
+PLOT_KWARGS_SPREAD = _kwmap([
+    dict(smooth=False, show_error_minus_spread=True),
+    dict(smooth=24),
+    dict(xlim=(0, 20)),
+    dict(xlim=(0, 48)),
+    dict(smooth=False, show_error_minus_spread=True, ens='red'),
+])
+PLOT_KWARGS_GEOPOT = _kwmap([
+    dict(smooth=24),
+    dict(xlim=(0, 20)),
+    dict(xlim=(0, 48)),
+    dict(smooth=False, ens='red'),
+])
+PLOT_KWARGS_ALLCASES_GEOPOT = _kwmap([
+    dict(smooth=False),
+    dict(smooth=24),
+    dict(xlim=(0, 20)),
+    dict(xlim=(0, 48)),
+    dict(smooth=False, ens='red'),
+])
 
 
 # STASHCODES:
@@ -790,9 +824,7 @@ def plot_spread_error_inputs(plot_kwargs, case, regrid_method):
 
 
 def plot_spread_error_outputs(plot_kwargs, case, regrid_method):
-    plot_kwargs = dict(plot_kwargs)
-    kwstr = '-'.join(f'{k}={v}' for k, v in plot_kwargs.items())
-    kwstr = kwstr.replace(' ', '')
+    kwstr = plot_kwargs  # already the canonical kwstr (see _kwstr)
     basedir = conf.PATHS['figdir'] / 'ensemble' / case
     return {
         'fig': basedir / f'spread_error.{case}.{kwstr}.{regrid_method}.pdf',
@@ -802,20 +834,15 @@ def plot_spread_error_outputs(plot_kwargs, case, regrid_method):
 
 @rule(
     matrix={
-        'plot_kwargs': _hashable([
-            dict(smooth=False, show_error_minus_spread=True),
-            dict(smooth=24),
-            dict(xlim=(0, 20)),
-            dict(xlim=(0, 48)),
-            dict(smooth=False, show_error_minus_spread=True, ens='red'),
-        ]),
+        'plot_kwargs': list(PLOT_KWARGS_SPREAD),
         'case': conf.CASES,
         'regrid_method': settings.regrid_method,
     },
     inputs=plot_spread_error_inputs,
     outputs=plot_spread_error_outputs,
     depends_on=[calc_eRMSE, calc_dRMSE],
-    uses={'plot_spread_error_ts': plot_spread_error_ts, 'settings': settings},
+    uses={'plot_spread_error_ts': plot_spread_error_ts, 'settings': settings,
+          'PLOT_KWARGS_SPREAD': PLOT_KWARGS_SPREAD},
 )
 def plot_spread_error(inputs, outputs, plot_kwargs, case, regrid_method):
     """Plot spread-error for each experiment (single case), as a function of sigma (Guassian smoothing param).
@@ -823,7 +850,7 @@ def plot_spread_error(inputs, outputs, plot_kwargs, case, regrid_method):
     spread: dRMSE
     error: eRMSE
     """
-    plot_kwargs = dict(plot_kwargs)
+    plot_kwargs = PLOT_KWARGS_SPREAD[plot_kwargs]
     print(plot_kwargs, case, regrid_method)
 
     expt_eRMSE = {expt: xr.load_dataarray(inputs[f'{expt}_eRMSE']) for expt in conf.EXPT_SIM}
@@ -853,9 +880,7 @@ def plot_all_cases_spread_error_inputs(plot_kwargs, regrid_method):
 
 
 def plot_all_cases_spread_error_outputs(plot_kwargs, regrid_method):
-    plot_kwargs = dict(plot_kwargs)
-    kwstr = '-'.join(f'{k}={v}' for k, v in plot_kwargs.items())
-    kwstr = kwstr.replace(' ', '')
+    kwstr = plot_kwargs  # already the canonical kwstr (see _kwstr)
     basedir = conf.PATHS['figdir'] / 'ensemble' / 'all_cases'
     return {
         'fig': basedir / f'spread_error.all_cases.{kwstr}.{regrid_method}.pdf',
@@ -866,13 +891,7 @@ def plot_all_cases_spread_error_outputs(plot_kwargs, regrid_method):
 
 @rule(
     matrix={
-        'plot_kwargs': _hashable([
-            dict(smooth=False, show_error_minus_spread=True),
-            dict(smooth=24),
-            dict(xlim=(0, 20)),
-            dict(xlim=(0, 48)),
-            dict(smooth=False, show_error_minus_spread=True, ens='red'),
-        ]),
+        'plot_kwargs': list(PLOT_KWARGS_SPREAD),
         'regrid_method': settings.regrid_method,
     },
     inputs=plot_all_cases_spread_error_inputs,
@@ -882,6 +901,7 @@ def plot_all_cases_spread_error_outputs(plot_kwargs, regrid_method):
         'plot_spread_error_ts': plot_spread_error_ts,
         'plot_summary_spread_error_ts': plot_summary_spread_error_ts,
         'settings': settings,
+        'PLOT_KWARGS_SPREAD': PLOT_KWARGS_SPREAD,
     },
 )
 def plot_all_cases_spread_error(inputs, outputs, plot_kwargs, regrid_method):
@@ -890,7 +910,7 @@ def plot_all_cases_spread_error(inputs, outputs, plot_kwargs, regrid_method):
     spread: eRMSE
     error: dRMSE
     """
-    plot_kwargs = dict(plot_kwargs)
+    plot_kwargs = PLOT_KWARGS_SPREAD[plot_kwargs]
     print(plot_kwargs, regrid_method)
     # Give all datasets identical times so that they can be concatted along this dim.
     times = np.arange(
@@ -1619,9 +1639,7 @@ def plot_geopot_spread_error_inputs(plot_kwargs, case, domain):
 
 
 def plot_geopot_spread_error_outputs(plot_kwargs, case, domain):
-    plot_kwargs = dict(plot_kwargs)
-    kwstr = '-'.join(f'{k}={v}' for k, v in plot_kwargs.items())
-    kwstr = kwstr.replace(' ', '')
+    kwstr = plot_kwargs  # already the canonical kwstr (see _kwstr)
     return {
         'fig': (
             conf.PATHS['figdir'] / 'ensemble' / case / 'geopot' / f'geopot_spread_error.{case}.{domain}.{kwstr}.pdf'
@@ -1631,23 +1649,19 @@ def plot_geopot_spread_error_outputs(plot_kwargs, case, domain):
 
 @rule(
     matrix={
-        'plot_kwargs': _hashable([
-            dict(smooth=24),
-            dict(xlim=(0, 20)),
-            dict(xlim=(0, 48)),
-            dict(smooth=False, ens='red'),
-        ]),
+        'plot_kwargs': list(PLOT_KWARGS_GEOPOT),
         'case': conf.CASES,
         'domain': ['global', 'tropics'],
     },
     inputs=plot_geopot_spread_error_inputs,
     outputs=plot_geopot_spread_error_outputs,
     depends_on=[calc_geopot_eRMSE, calc_geopot_dRMSE],
-    uses={'plot_geopot_spread_error_ts': plot_geopot_spread_error_ts},
+    uses={'plot_geopot_spread_error_ts': plot_geopot_spread_error_ts,
+          'PLOT_KWARGS_GEOPOT': PLOT_KWARGS_GEOPOT},
 )
 def plot_geopot_spread_error(inputs, outputs, plot_kwargs, case, domain):
     """Plots geopot spread-error, over global and tropical domain, for each case."""
-    plot_kwargs = dict(plot_kwargs)
+    plot_kwargs = PLOT_KWARGS_GEOPOT[plot_kwargs]
     print(case, plot_kwargs)
     expt_eRMSE = {expt: xr.load_dataarray(inputs[f'{expt}_eRMSE']) for expt in conf.EXPT_SIM}
     expt_dRMSE = {expt: xr.load_dataarray(inputs[f'{expt}_dRMSE']) for expt in conf.EXPT_SIM}
@@ -1672,9 +1686,7 @@ def plot_all_cases_geopot_spread_error_inputs(plot_kwargs, domain):
 
 
 def plot_all_cases_geopot_spread_error_outputs(plot_kwargs, domain):
-    plot_kwargs = dict(plot_kwargs)
-    kwstr = '-'.join(f'{k}={v}' for k, v in plot_kwargs.items())
-    kwstr = kwstr.replace(' ', '')
+    kwstr = plot_kwargs  # already the canonical kwstr (see _kwstr)
     return {
         'fig': (
             conf.PATHS['figdir']
@@ -1688,23 +1700,18 @@ def plot_all_cases_geopot_spread_error_outputs(plot_kwargs, domain):
 
 @rule(
     matrix={
-        'plot_kwargs': _hashable([
-            dict(smooth=False),
-            dict(smooth=24),
-            dict(xlim=(0, 20)),
-            dict(xlim=(0, 48)),
-            dict(smooth=False, ens='red'),
-        ]),
+        'plot_kwargs': list(PLOT_KWARGS_ALLCASES_GEOPOT),
         'domain': ['global', 'tropics'],
     },
     inputs=plot_all_cases_geopot_spread_error_inputs,
     outputs=plot_all_cases_geopot_spread_error_outputs,
     depends_on=[calc_geopot_eRMSE, calc_geopot_dRMSE],
-    uses={'plot_geopot_spread_error_ts': plot_geopot_spread_error_ts},
+    uses={'plot_geopot_spread_error_ts': plot_geopot_spread_error_ts,
+          'PLOT_KWARGS_ALLCASES_GEOPOT': PLOT_KWARGS_ALLCASES_GEOPOT},
 )
 def plot_all_cases_geopot_spread_error(inputs, outputs, plot_kwargs, domain):
     """Plots geopot spread-error, over global and tropical domain, for all cases.."""
-    plot_kwargs = dict(plot_kwargs)
+    plot_kwargs = PLOT_KWARGS_ALLCASES_GEOPOT[plot_kwargs]
     print(plot_kwargs, domain)
 
     # Give all datasets identical times so that they can be concatted along this dim.
