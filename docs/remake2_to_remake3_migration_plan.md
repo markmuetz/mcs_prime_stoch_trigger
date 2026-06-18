@@ -12,15 +12,49 @@ Follows the workflow in the remake3 skill's `remake2_to_remake3.md`:
 translate by hand, wire `depends_on` explicitly (against the ground-truth
 DAG in `docs/remake2_rule_dags.txt`), declare module globals via `uses=`.
 
-## Status: all 6 production files translated (validated under remake3 `-n`)
+## Status: COMPLETE — equivalence test PASSED (2026-06-18)
 
-`proj_config.py`, `utils.py`, `download_gpm_imerg.py`, `download_era5.py`,
-`ASoP_analysis.py`, `N216_ens_analysis.py` are all done: they import
-cleanly, scope-check clean, expand to the expected task counts, and (for
-`ASoP`/`N216`) the remake3 rule DAG reproduces the remake2 `rule_dg`
-exactly. **Remaining work is the actual equivalence run + diff** (run each
-file to completion against the `*_remake3` tree, compare to the remake2
-outputs — see Acceptance test) and the deployment-env decision.
+The migration is done and validated. All 6 production files
+(`proj_config.py`, `utils.py`, `download_gpm_imerg.py`, `download_era5.py`,
+`ASoP_analysis.py`, `N216_ens_analysis.py`) import cleanly, scope-check
+clean, expand to the expected task counts, and (for `ASoP`/`N216`) the
+remake3 rule DAG reproduces the remake2 `rule_dg` exactly. The full
+pipeline was then run end-to-end on JASMIN via the SLURM executor into the
+parallel `REMAKE3_RUN_TAG` tree (`remake3_run3`) and diffed against the
+remake2 outputs.
+
+**Result: every paper figure reproduces the remake2 reference visually
+identically** — fig01–fig04, the supplementary figure, and the ASoP
+fig02/fig03 set — confirmed not just side-by-side but by overlay-switching,
+with no discernible difference. No scientifically meaningful difference
+between the remake2 and remake3 pipelines.
+
+Issues found and resolved during the equivalence run (all now fixed
+upstream in remake3, or worked around here):
+- **SLURM JSON-round-trip kwargs bug.** The `plot_kwargs` dict-valued
+  matrix (legal in remake2) is rejected by remake3's planner as unhashable;
+  the first fix (`tuple(d.items())`) passed every local run but silently
+  broke under SLURM (JSON has no tuples → task-key + output-filename
+  mismatch between submit and compute node). Final fix: encode each variant
+  as a canonical **string** with a module-level `{str: dict}` map looked up
+  in the rule bodies (`_kwstr`/`_kwmap`/`PLOT_KWARGS_*` in
+  `N216_ens_analysis.py`). remake3 now rejects non-JSON-scalar matrix values
+  at plan time.
+- **Output-path redirection orphans.** Redirecting output dirs is *not*
+  seen by the planner as a reason to rerun (remake3 hashes run-code + uses,
+  not output paths — since fixed with `io_hash`). Worked around with a fresh
+  `.remake/` + empty `REMAKE3_RUN_TAG` tree so everything reruns.
+- **Clobbering guard.** Early runs wrote `{suite}/processed/...` into the
+  shared `SIMDIR`, overwriting remake2 reference data; `SIMPROC_DIR`
+  (separate from raw-input `SIMDIR`) now isolates processed outputs.
+- **exit-127 on SLURM** (`remake: command not found`): submit from an env
+  where remake3 is pip-installed/on PATH, not a `PYTHONPATH`-shadowed dev
+  checkout (SLURM propagates submit-time PATH via `--export=ALL`).
+
+**Remaining (optional) work is deployment only:** flip
+`REMAKE3_EQUIVALENCE_TEST = False` in `proj_config.py` to make remake3 write
+to the canonical (remake2) paths, then merge `remake3_migration` → `main`.
+Keep the remake2 files until that cutover.
 
 Two further remake3 constraints found during the `N216` translation:
 - **Task kwargs must be hashable.** The `plot_kwargs` matrix entries were
