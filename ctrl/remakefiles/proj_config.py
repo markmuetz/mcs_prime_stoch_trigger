@@ -14,7 +14,7 @@ REMAKE3_EQUIVALENCE_TEST = True
 # reruns and nothing is adopted from a previous run. Covers the {suite}/
 # processed/... outputs too (previously those landed in the shared SIMDIR
 # and were adopted / overwrote remake2 reference data).
-REMAKE3_RUN_TAG = 'remake3_run2'
+REMAKE3_RUN_TAG = 'remake3_run3'
 
 PATHS = {
     'datadir': Path('/gws/ssde/j25b/mcs_prime/mmuetz/data/'),
@@ -27,7 +27,7 @@ PATHS = {
 
 if REMAKE3_EQUIVALENCE_TEST:
     PATHS['outdir'] = Path(f'/gws/ssde/j25b/mcs_prime/mmuetz/data/mcs_prime_output_{REMAKE3_RUN_TAG}')
-    PATHS['figdir'] = Path(f'/gws/ssde/j25b/mcs_prime/mmuetz/data/mcs_prime_figs/N216sims/prod_{REMAKE3_RUN_TAG}')
+    PATHS['figdir'] = Path(f'/gws/ssde/j25b/mcs_prime/mmuetz/data/mcs_prime_figs_{REMAKE3_RUN_TAG}/N216sims/prod')
 
 DATADIR = PATHS['datadir']
 SIMDIR = DATADIR / 'UM_sims'

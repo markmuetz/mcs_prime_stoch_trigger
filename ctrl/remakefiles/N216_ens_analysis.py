@@ -36,7 +36,7 @@ from remake import Remake, rule
 import proj_config as conf
 
 slurm_config = {'account': 'mcs_prime', 'partition': 'standard', 'qos': 'standard', 'mem': 64000}
-rmk = Remake(config=dict(slurm=slurm_config))
+rmk = Remake(config=dict(slurm=slurm_config), check_outputs='never')
 
 expt_var = [
     (e, v)
