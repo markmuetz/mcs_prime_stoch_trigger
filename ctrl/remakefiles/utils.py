@@ -1,7 +1,7 @@
 from pathlib import Path
 import shutil
 import socket
-import traceback
+import sys
 
 import pandas as pd
 
@@ -31,12 +31,12 @@ def to_netcdf_tmp_then_copy(ds, outpath, encoding=None):
     tmppath.parent.mkdir(exist_ok=True, parents=True)
 
     # Add some metadata to the netcdf file.
-    stack = next(traceback.walk_stack(None))
-    frame = stack[0]
-    calling_file = frame.f_globals['__file__']
-    # calling_obj = frame.f_locals['self']
-    # calling_obj_doc = calling_obj.__doc__
-    # calling_class_name = calling_obj.__class__.__name__
+    # The direct caller is the rule function in the remakefile. Don't use
+    # traceback.walk_stack(None): on Python 3.12 it starts several frames further up,
+    # so it recorded remake's own remake_cmd.py instead of the remakefile.
+    frame = sys._getframe(1)
+    calling_file = frame.f_code.co_filename
+    calling_function = frame.f_code.co_name
     # remake3: outpath is already the real output path (no tmp->actual map).
     output_path_actual = outpath
 
@@ -44,10 +44,9 @@ def to_netcdf_tmp_then_copy(ds, outpath, encoding=None):
     remake_version = remake.__version__
 
     metadata_attrs = {
-        'created by': f'{calling_file}',
-        # 'created by': f'{calling_file}: {calling_class_name}',
+        'created by': f'{calling_file}: {calling_function}',
         'calling file source': Path(calling_file).read_text(),
-        'project repository': 'https://github.com/markmuetz/MCS_PRIME',
+        'project repository': 'https://github.com/markmuetz/mcs_prime_stoch_trigger',
         'remake version': remake_version,
         'remake repository': 'https://github.com/markmuetz/remake',
         # 'task': f'{calling_obj}',
