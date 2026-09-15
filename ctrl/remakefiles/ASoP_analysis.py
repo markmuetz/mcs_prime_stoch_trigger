@@ -225,19 +225,27 @@ def plot_asop_n216regional(inputs, outputs, region, case, coarsen_time, ensemble
     for i, ax in enumerate([*axes[:4, 0], *axes[:4, 1], *axes[4:, 0], *axes[4:, 1]]):
         c = string.ascii_lowercase[i]
         ax.set_title(f'{c})', loc='left')
+
+    bin_labels = {
+        0: 'low',
+        1: 'moderate',
+        2: 'heavy',
+        3: 'extreme',
+    }
     for row in range(8):
         i = row % 4
+        bin_label = bin_labels[i]
         ax = axes[row, 0]
         if i < 3:
             t0 = asop.fractional_contrib_thresh_mmpday[i]
             t1 = asop.fractional_contrib_thresh_mmpday[i + 1]
-            label = f'{t0:.0f}–{t1:.0f}\nmm day$^{{-1}}$'
+            label = f'{bin_label}\n{t0:.0f}–{t1:.0f}\nmm day$^{{-1}}$'
         else:
             t0 = asop.fractional_contrib_thresh_mmpday[i]
-            label = f'>{t0:.0f}\nmm day$^{{-1}}$'
+            label = f'{bin_label}\n>{t0:.0f}\nmm day$^{{-1}}$'
         # ax.set_ylabel(label)
         # cartopy messes up set_ylabel - position manually.
-        ax.text(-0.05, 0.5, label, transform=ax.transAxes,
+        ax.text(-0.08, 0.5, label, transform=ax.transAxes,
                 va='center', ha='center', rotation=90)
 
     print(f'i makde a picutre! {outputs["fractional_contrib"]}')
