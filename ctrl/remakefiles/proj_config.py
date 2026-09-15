@@ -3,42 +3,36 @@ from pathlib import Path
 from remake import util
 
 
-# remake3 migration: outputs are redirected to a parallel tree (tagged by
-# REMAKE3_RUN_TAG) so the existing remake2 outputs survive for the
-# equivalence diff. Inputs (datadir, era5dir, SIMDIR raw sim files) stay
-# shared - remake3 reads the same raw data.
-# Flip this to False to write to the original (remake2) locations.
-REMAKE3_EQUIVALENCE_TEST = True
-# Bump this for a fresh-from-scratch equivalence run: it points outdir,
-# figdir and the processed-sim dir at a brand-new empty tree, so every task
-# reruns and nothing is adopted from a previous run. Covers the {suite}/
-# processed/... outputs too (previously those landed in the shared SIMDIR
-# and were adopted / overwrote remake2 reference data).
-REMAKE3_RUN_TAG = 'remake3_run3'
+# Outputs go under a tagged top-level dir, DATADIR / OUTPUT_TAG, so that a run in a
+# new environment writes a fresh tree and leaves earlier outputs alone for comparison:
+#   {OUTPUT_TAG}/mcs_prime_output              NetCDF intermediates + final data (outdir)
+#   {OUTPUT_TAG}/mcs_prime_figs/N216sims/prod  figures (figdir)
+#   {OUTPUT_TAG}/UM_sims                       processed sim outputs ({suite}/processed/...)
+# Inputs (datadir, era5dir, the raw {suite}/share/cycle files in SIMDIR) stay shared.
+# Set OUTPUT_TAG = None to write to the canonical (untagged, remake2) locations.
+# Previous tagged tree: remake3_run3 (the remake3 equivalence test), which used the
+# mcs_prime_output_remake3_run3 / mcs_prime_figs_remake3_run3 / UM_sims_remake3_run3 layout.
+OUTPUT_TAG = 'pixi_env'
+
+DATADIR = Path('/gws/ssde/j25b/mcs_prime/mmuetz/data/')
+SIMDIR = DATADIR / 'UM_sims'
+
+if OUTPUT_TAG is None:
+    _outbase = DATADIR
+    # Processed sim outputs sit alongside the raw inputs in the canonical layout.
+    SIMPROC_DIR = SIMDIR
+else:
+    _outbase = DATADIR / OUTPUT_TAG
+    SIMPROC_DIR = _outbase / 'UM_sims'
 
 PATHS = {
-    'datadir': Path('/gws/ssde/j25b/mcs_prime/mmuetz/data/'),
-    'outdir': Path('/gws/ssde/j25b/mcs_prime/mmuetz/data/mcs_prime_output'),
-    'figdir': Path('/gws/ssde/j25b/mcs_prime/mmuetz/data/mcs_prime_figs/N216sims/prod'),
+    'datadir': DATADIR,
+    'outdir': _outbase / 'mcs_prime_output',
+    'figdir': _outbase / 'mcs_prime_figs/N216sims/prod',
     # Checking this dir causing proc to hang.
     # 'era5dir': Path('/does/not/exist'),
     'era5dir': Path('/badc/ecmwf-era5'),
 }
-
-if REMAKE3_EQUIVALENCE_TEST:
-    PATHS['outdir'] = Path(f'/gws/ssde/j25b/mcs_prime/mmuetz/data/mcs_prime_output_{REMAKE3_RUN_TAG}')
-    PATHS['figdir'] = Path(f'/gws/ssde/j25b/mcs_prime/mmuetz/data/mcs_prime_figs_{REMAKE3_RUN_TAG}/N216sims/prod')
-
-DATADIR = PATHS['datadir']
-SIMDIR = DATADIR / 'UM_sims'
-# Processed sim outputs ({suite}/processed/... files) go under SIMPROC_DIR,
-# kept separate from SIMDIR (which holds the shared raw {suite}/share/cycle
-# inputs) so the equivalence run never reads/overwrites the original
-# remake2 processed data.
-if REMAKE3_EQUIVALENCE_TEST:
-    SIMPROC_DIR = DATADIR / f'UM_sims_{REMAKE3_RUN_TAG}'
-else:
-    SIMPROC_DIR = SIMDIR
 N_ENS_MEM = 10
 
 EXPT_SIM = {

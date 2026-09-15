@@ -296,7 +296,9 @@ class ASoPlite:
         elif self.biperiodic == 'both':
             xyslice = (None, slice(3, -3), slice(3, -3))
 
-        values = da.values
+        # float64: pearsonr over ~30M float32 values loses enough precision that even the
+        # zero-offset self-correlation comes out ~0.99 (scipy >= 1.15 keeps float32 inputs as float32).
+        values = da.values.astype(np.float64)
         values[np.isnan(values)] = 0
         values_flat = values[xyslice].flatten()
         self.spat_corr = np.zeros((7, 7))
@@ -343,6 +345,9 @@ class ASoPlite:
     def calc_7x7_spat_temp_corr(self):
         """Calc the 7x7 spatio-temporal correlation matrix, as in KMM17, Fig 2e."""
         da = self.da.load()
+        # float64 for pearsonr precision; see calc_7x7_spat_corr. NaNs -> 0 here too: the old
+        # calc_7x7_spat_corr zeroed them in self.da as a side effect, which this relied on.
+        da = da.astype(np.float64).fillna(0)
         biperiodic = self.biperiodic
         self.spat_temp_corr = np.zeros((5, 7, 7))
         for i, j, k in product(range(7), range(7), range(5)):

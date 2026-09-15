@@ -1,0 +1,41 @@
+# pixi env for the MCS:PRIME stochastic trigger remakefiles (ctrl/remakefiles).
+#
+# conda-forge because of esmpy/xesmf (N216_ens_analysis regrids) and mo_pack (theta_e_analysis
+# reads WGDOS-packed UM .pp files with iris). remake is an editable install of ~/projects/local/remake.
+#
+#   pixi install
+#   cd ctrl/remakefiles && pixi run remake run N216_ens_analysis.py -E slurm -Q "..."
+#
+# SLURM jobs inherit the submit-time PATH (sbatch --export=ALL), so always submit via `pixi run`
+# (or from `pixi shell`) so the compute nodes find this env's `remake`.
+[workspace]
+name = "mcs_prime_stoch_trigger"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[dependencies]
+python = "3.12.*"
+cartopy = "*"
+cdsapi = "*"
+cf_xarray = "*"
+dask = "*"
+esmpy = "*"
+iris = "*"
+ipython = "*"
+matplotlib = "*"
+metpy = "*"
+mo_pack = "*"
+netcdf4 = "*"
+networkx = "*"
+numpy = "*"
+pandas = "*"
+requests = "*"
+scipy = "*"
+seaborn = "*"
+shapely = "*"
+xarray = "*"
+xesmf = "*"
+loguru = "*"
+
+[pypi-dependencies]
+remake = { path = "../remake", editable = true }
