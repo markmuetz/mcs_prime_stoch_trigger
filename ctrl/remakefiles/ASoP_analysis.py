@@ -125,7 +125,7 @@ def asop_n216regional_outputs(expt, case, region, coarsen_time, ensemble_member)
     matrix={
         # These are analysis used in the paper.
         'expt': ['imerg', 'Control', 'PRIME-MCSP', 'STOCH-PRIME-MCSP'],
-        'region': ['tropics'],
+        'region': ['tropics', 'eq_warm_pool'],
         'case': ['all_cases'],
         'coarsen_time': ['3-hourly'],
         'ensemble_member': [1, 2, 3, 4, 5, 6, 7, 8, 9],
@@ -173,7 +173,7 @@ def plot_asop_n216regional_outputs(region, case, coarsen_time, ensemble_member):
 @rule(
     matrix={
         # These are analysis used in the paper.
-        'region': ['tropics'],
+        'region': ['tropics', 'eq_warm_pool'],
         'case': ['all_cases'],
         'coarsen_time': ['3-hourly'],
         'ensemble_member': [1, 2, 3, 4, 5, 6, 7, 8, 9],

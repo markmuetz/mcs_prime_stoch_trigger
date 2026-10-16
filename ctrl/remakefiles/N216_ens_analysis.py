@@ -935,8 +935,8 @@ def plot_all_cases_spread_error(inputs, outputs, plot_kwargs, regrid_method):
                 continue
             case_expt_eRMSE = xr.load_dataarray(inputs[f'{case}_{expt}_eRMSE'])
             case_expt_dRMSE = xr.load_dataarray(inputs[f'{case}_{expt}_dRMSE'])
-            case_expt_eRMSE.time.values[:] = times
-            case_expt_dRMSE.time.values[:] = times
+            case_expt_eRMSE = case_expt_eRMSE.assign_coords(time=times)
+            case_expt_dRMSE = case_expt_dRMSE.assign_coords(time=times)
             case_expt_eRMSEs.append(case_expt_eRMSE)
             case_expt_dRMSEs.append(case_expt_dRMSE)
         expt_eRMSE[expt] = xr.concat(case_expt_eRMSEs, dim='case').mean(dim='case')
@@ -1741,8 +1741,8 @@ def plot_all_cases_geopot_spread_error(inputs, outputs, plot_kwargs, domain):
                 continue
             case_expt_eRMSE = xr.load_dataarray(inputs[f'{case}_{expt}_eRMSE'])
             case_expt_dRMSE = xr.load_dataarray(inputs[f'{case}_{expt}_dRMSE'])
-            case_expt_eRMSE.time.values[:] = times
-            case_expt_dRMSE.time.values[:] = times
+            case_expt_eRMSE = case_expt_eRMSE.assign_coords(time=times)
+            case_expt_dRMSE = case_expt_dRMSE.assign_coords(time=times)
             case_expt_eRMSEs.append(case_expt_eRMSE)
             case_expt_dRMSEs.append(case_expt_dRMSE)
         expt_eRMSE[expt] = xr.concat(case_expt_eRMSEs, dim='case').mean(dim='case')
