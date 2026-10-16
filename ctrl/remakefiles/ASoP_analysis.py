@@ -213,7 +213,7 @@ def plot_asop_n216regional(inputs, outputs, region, case, coarsen_time, ensemble
     for axcol, (expt, asop) in zip([axes[:4, 0], axes[:4, 1], axes[4:, 0], axes[4:, 1]], asops.items()):
         print(f'i am in ur loopz {expt}')
         im = asop.plot_fractional_contrib(axes=axcol, colorbar=False)
-        expt = expt.upper() if expt == 'imerg' else expt
+        expt = 'IMERG' if expt == 'imerg' else conf.EXPT_DISPLAY_NAME[expt]
         axcol[0].set_title(expt)
         axcol[1].set_title('')
         axcol[2].set_title('')
@@ -255,7 +255,7 @@ def plot_asop_n216regional(inputs, outputs, region, case, coarsen_time, ensemble
     fig.set_size_inches(16, 12)
     for i, (ax, (expt, asop)) in enumerate(zip(axes.flatten(), asops.items())):
         asop.plot_precip_prob_matrix(ax=ax)
-        expt = expt.upper() if expt == 'imerg' else expt
+        expt = 'IMERG' if expt == 'imerg' else conf.EXPT_DISPLAY_NAME[expt]
         ax.set_title(expt)
         c = string.ascii_lowercase[i]
         ax.set_title(f'{c})', loc='left')
@@ -265,7 +265,7 @@ def plot_asop_n216regional(inputs, outputs, region, case, coarsen_time, ensemble
     fig.set_size_inches(12, 8)
     for i, (ax, (expt, asop)) in enumerate(zip(axes.flatten(), asops.items())):
         asop.plot_7x7_spat_corr(ax=ax)
-        expt = expt.upper() if expt == 'imerg' else expt
+        expt = 'IMERG' if expt == 'imerg' else conf.EXPT_DISPLAY_NAME[expt]
         ax.set_title(expt)
         c = string.ascii_lowercase[i]
         ax.set_title(f'{c})', loc='left')
@@ -275,7 +275,7 @@ def plot_asop_n216regional(inputs, outputs, region, case, coarsen_time, ensemble
     fig.set_size_inches(7, 5)
     for i, (ax, (expt, asop)) in enumerate(zip(axes.flatten(), asops.items())):
         im = asop.plot_7x7_spat_temp_corr(ax=ax)
-        expt = expt.upper() if expt == 'imerg' else expt
+        expt = 'IMERG' if expt == 'imerg' else conf.EXPT_DISPLAY_NAME[expt]
         ax.set_title(expt)
         c = string.ascii_lowercase[i]
         ax.set_title(f'{c})', loc='left')

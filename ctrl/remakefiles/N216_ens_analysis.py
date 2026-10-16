@@ -353,7 +353,7 @@ def plot_precip_snapshots(inputs, outputs, case, regrid_method, ens, red_cf_expt
         norm = mpl.colors.BoundaryNorm(boundaries, ncolors=256)
         rects = []
         for j, da, ax, name in zip(range(4), [imerg] + [ds[e] for e in expts], global_axes.flat,
-                                   ['IMERG'] + list(expts)):
+                                   ['IMERG'] + [conf.EXPT_DISPLAY_NAME.get(e, e) for e in expts]):
             c = string.ascii_lowercase[j]
             im = ax.pcolormesh(da.longitude, da.latitude, da.isel(time=i), norm=norm, cmap=cmap)
             ax.coastlines()
@@ -744,7 +744,7 @@ def plot_summary_spread_error_ts(expt_dRMSE, expt_eRMSE, ens='full'):
             expt_eRMSE[expt] = expt_eRMSE[expt].sel(realization=slice(1, 10))
         dRMSE_sigma = dRMSE.mean(dim=['realization1', 'realization2', 'time']).values
         eRMSE_sigma = expt_eRMSE[expt].mean(dim=['realization', 'time']).values
-        ax.plot(dRMSE.sigma, dRMSE_sigma - eRMSE_sigma, label=f'{expt}')
+        ax.plot(dRMSE.sigma, dRMSE_sigma - eRMSE_sigma, label=conf.EXPT_DISPLAY_NAME[expt])
     ax.axhline(y=0, ls='--', color='k')
     ax.set_xlabel('sigma')
     ax.set_ylabel('spread - error (mm h$^{-1}$)')
@@ -779,10 +779,10 @@ def plot_spread_error_ts(expt_dRMSE, expt_eRMSE, smooth=False, xlim='full', show
                 dRMSE_ts = np.convolve(dRMSE_ts, np.ones((smooth,)) / smooth, mode='same')
                 eRMSE_ts = np.convolve(eRMSE_ts, np.ones((smooth,)) / smooth, mode='same')
             c = cs[i]
-            ax.plot(eRMSE_ts, color=c, label=f'{expt} error')
-            ax.plot(dRMSE_ts, ls='--', color=c, label=f'{expt} spread')
+            ax.plot(eRMSE_ts, color=c, label=f'{conf.EXPT_DISPLAY_NAME[expt]} error')
+            ax.plot(dRMSE_ts, ls='--', color=c, label=f'{conf.EXPT_DISPLAY_NAME[expt]} spread')
             if show_error_minus_spread:
-                ax.plot(dRMSE_ts - eRMSE_ts, ls=':', color=c, label=f'{expt} spread - error')
+                ax.plot(dRMSE_ts - eRMSE_ts, ls=':', color=c, label=f'{conf.EXPT_DISPLAY_NAME[expt]} spread - error')
                 ax.axhline(y=0, ls='-', lw=0.5, color='k')
 
         times_half_days_hours = np.arange(0, ntime + 1, 12)
@@ -928,11 +928,6 @@ def plot_all_cases_spread_error(inputs, outputs, plot_kwargs, regrid_method):
         case_expt_eRMSEs = []
         case_expt_dRMSEs = []
         for case in conf.CASES:
-            # TODO:
-            if '04' in case:
-                # There is an issue with the data for April for u-dg135.
-                # Skip for now.
-                continue
             case_expt_eRMSE = xr.load_dataarray(inputs[f'{case}_{expt}_eRMSE'])
             case_expt_dRMSE = xr.load_dataarray(inputs[f'{case}_{expt}_dRMSE'])
             case_expt_eRMSE = case_expt_eRMSE.assign_coords(time=times)
@@ -977,8 +972,7 @@ def plot_all_cases_closest_member(inputs, outputs, regrid_method):
     """Plot closest-member RMSE alongside eRMSE and dRMSE (all cases, ens=red).
 
     closest-member RMSE: min over members of RMSE(IMERG, member), taken per case and time, then
-    averaged over cases (eRMSE is the mean over members). Uses the same cases as
-    plot_all_cases_spread_error (i.e. April skipped). For the response to reviewers (R2, round 2, comment 6).
+    averaged over all 12 cases (eRMSE is the mean over members). For the response to reviewers (R2, round 2, comment 6).
     """
     times = np.arange(
         np.datetime64('2020-01-01T04:00:00'),
@@ -994,9 +988,6 @@ def plot_all_cases_closest_member(inputs, outputs, regrid_method):
     for expt in conf.EXPT_SIM:
         eRMSEs, dRMSEs, closests = [], [], []
         for case in conf.CASES:
-            if '04' in case:
-                # As in plot_all_cases_spread_error: issue with April data for u-dg135.
-                continue
             eRMSE = xr.load_dataarray(inputs[f'{case}_{expt}_eRMSE']).assign_coords(time=times)
             dRMSE = xr.load_dataarray(inputs[f'{case}_{expt}_dRMSE']).assign_coords(time=times)
             eRMSE = eRMSE.sel(realization=red)
@@ -1017,9 +1008,9 @@ def plot_all_cases_closest_member(inputs, outputs, regrid_method):
         ax.set_title(rf'$\sigma=${sigma}')
         ax.set_title(f'{string.ascii_lowercase[i]})', loc='left')
         for c, expt in zip(cs, conf.EXPT_SIM):
-            ax.plot(expt_eRMSE[expt].sel(sigma=sigma).values, color=c, label=f'{expt} error')
-            ax.plot(expt_dRMSE[expt].sel(sigma=sigma).values, ls='--', color=c, label=f'{expt} spread')
-            ax.plot(expt_closest[expt].sel(sigma=sigma).values, ls='-.', color=c, label=f'{expt} closest member')
+            ax.plot(expt_eRMSE[expt].sel(sigma=sigma).values, color=c, label=f'{conf.EXPT_DISPLAY_NAME[expt]} error')
+            ax.plot(expt_dRMSE[expt].sel(sigma=sigma).values, ls='--', color=c, label=f'{conf.EXPT_DISPLAY_NAME[expt]} spread')
+            ax.plot(expt_closest[expt].sel(sigma=sigma).values, ls='-.', color=c, label=f'{conf.EXPT_DISPLAY_NAME[expt]} closest member')
         times_half_days_hours = np.arange(0, ntime + 1, 12)
         times_days = [int(v) for v in times_half_days_hours / 24]
         times_days[1::2] = [''] * len(times_days[1::2])
@@ -1833,7 +1824,7 @@ def plot_all_cases_geopot_spread_error(inputs, outputs, plot_kwargs, domain):
         for case in conf.CASES:
             # TODO:
             if '04' in case:
-                # There is an issue with the data for April for u-dg135.
+                # u-di728 (PRIME-MCSP) April Z500 (englaa_pb...m01s16i202.500hPa.nc) is ~44% unmasked fill values.
                 # Skip for now.
                 continue
             case_expt_eRMSE = xr.load_dataarray(inputs[f'{case}_{expt}_eRMSE'])

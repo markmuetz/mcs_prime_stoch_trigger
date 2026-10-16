@@ -40,6 +40,13 @@ EXPT_SIM = {
     'PRIME-MCSP': 'u-di728',
     'STOCH-PRIME-MCSP': 'u-dg135',
 }
+# Names shown in figure titles/legends (paper spelling). Keys above stay as-is so that
+# file paths and task keys are unchanged.
+EXPT_DISPLAY_NAME = {
+    'Control': 'Control',
+    'PRIME-MCSP': 'PRIME-MCSP',
+    'STOCH-PRIME-MCSP': 'Stoch-PRIME-MCSP',
+}
 
 CASES = [
     f'2020{m:02d}01T0000Z'
