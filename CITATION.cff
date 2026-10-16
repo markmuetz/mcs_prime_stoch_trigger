@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata from this file."
+title: "Analysis code for: An observationally constrained probabilistic trigger for organized deep convection in an NWP ensemble"
+type: software
+authors:
+  - family-names: Muetzelfeldt
+    given-names: Mark R.
+    email: mark.muetzelfeldt@reading.ac.uk
+    affiliation: "Department of Meteorology, University of Reading"
+    orcid: "https://orcid.org/0000-0002-6851-7351"
+repository-code: "https://github.com/markmuetz/mcs_prime_stoch_trigger"
+license: MIT
+keywords:
+  - mesoscale convective systems
+  - stochastic parametrization
+  - ensemble forecasting
+  - Unified Model
+  - MCSP
+abstract: >-
+  Analysis code (remake workflows) used to produce the figures in Muetzelfeldt et al.,
+  "An observationally constrained probabilistic trigger for organized deep convection
+  in an NWP ensemble" (submitted to QJRMS). It processes N216 Unified Model ensemble
+  simulations and GPM IMERG V07 precipitation on JASMIN.
