@@ -952,6 +952,103 @@ def plot_all_cases_spread_error(inputs, outputs, plot_kwargs, regrid_method):
     plt.savefig(outputs['summary_fig'])
 
 
+def plot_all_cases_closest_member_inputs(regrid_method):
+    return plot_all_cases_spread_error_inputs(None, regrid_method)
+
+
+def plot_all_cases_closest_member_outputs(regrid_method):
+    basedir = conf.PATHS['figdir'] / 'ensemble' / 'all_cases'
+    return {
+        'fig': basedir / f'closest_member_rmse.all_cases.ens=red.{regrid_method}.pdf',
+        'summary': basedir / f'closest_member_rmse.summary.all_cases.ens=red.{regrid_method}.csv',
+    }
+
+
+@rule(
+    matrix={
+        'regrid_method': settings.regrid_method,
+    },
+    inputs=plot_all_cases_closest_member_inputs,
+    outputs=plot_all_cases_closest_member_outputs,
+    depends_on=[calc_eRMSE, calc_dRMSE],
+    uses={'settings': settings},
+)
+def plot_all_cases_closest_member(inputs, outputs, regrid_method):
+    """Plot closest-member RMSE alongside eRMSE and dRMSE (all cases, ens=red).
+
+    closest-member RMSE: min over members of RMSE(IMERG, member), taken per case and time, then
+    averaged over cases (eRMSE is the mean over members). Uses the same cases as
+    plot_all_cases_spread_error (i.e. April skipped). For the response to reviewers (R2, round 2, comment 6).
+    """
+    times = np.arange(
+        np.datetime64('2020-01-01T04:00:00'),
+        np.datetime64('2020-01-11T04:00:00'),
+        np.timedelta64(1, 'h'),
+        dtype='datetime64[ns]',
+    )
+    red = slice(1, 10)  # Members 1-9 (exclude deterministic em0).
+
+    expt_eRMSE = {}
+    expt_dRMSE = {}
+    expt_closest = {}
+    for expt in conf.EXPT_SIM:
+        eRMSEs, dRMSEs, closests = [], [], []
+        for case in conf.CASES:
+            if '04' in case:
+                # As in plot_all_cases_spread_error: issue with April data for u-dg135.
+                continue
+            eRMSE = xr.load_dataarray(inputs[f'{case}_{expt}_eRMSE']).assign_coords(time=times)
+            dRMSE = xr.load_dataarray(inputs[f'{case}_{expt}_dRMSE']).assign_coords(time=times)
+            eRMSE = eRMSE.sel(realization=red)
+            dRMSE = dRMSE.sel(realization1=red, realization2=red)
+            eRMSEs.append(eRMSE.mean(dim='realization'))
+            closests.append(eRMSE.min(dim='realization'))
+            dRMSEs.append(dRMSE.mean(dim=['realization1', 'realization2']))
+        expt_eRMSE[expt] = xr.concat(eRMSEs, dim='case').mean(dim='case')
+        expt_dRMSE[expt] = xr.concat(dRMSEs, dim='case').mean(dim='case')
+        expt_closest[expt] = xr.concat(closests, dim='case').mean(dim='case')
+
+    ntime = len(times)
+    plot_sigmas = (0, 2, 4)
+    fig, axes = plt.subplots(1, len(plot_sigmas), sharex=True, layout='constrained')
+    fig.set_size_inches(8, 3.5)
+    cs = plt.rcParams['axes.prop_cycle'].by_key()['color']
+    for i, (ax, sigma) in enumerate(zip(axes, plot_sigmas)):
+        ax.set_title(rf'$\sigma=${sigma}')
+        ax.set_title(f'{string.ascii_lowercase[i]})', loc='left')
+        for c, expt in zip(cs, conf.EXPT_SIM):
+            ax.plot(expt_eRMSE[expt].sel(sigma=sigma).values, color=c, label=f'{expt} error')
+            ax.plot(expt_dRMSE[expt].sel(sigma=sigma).values, ls='--', color=c, label=f'{expt} spread')
+            ax.plot(expt_closest[expt].sel(sigma=sigma).values, ls='-.', color=c, label=f'{expt} closest member')
+        times_half_days_hours = np.arange(0, ntime + 1, 12)
+        times_days = [int(v) for v in times_half_days_hours / 24]
+        times_days[1::2] = [''] * len(times_days[1::2])
+        ax.set_xticks(times_half_days_hours, times_days)
+        ax.set_xlim((0, ntime))
+        ax.set_ylim((0, None))
+        ax.set_xlabel('time (day)')
+    axes[0].set_ylabel('RMSE (mm h$^{-1}$)')
+    handles, labels = axes[0].get_legend_handles_labels()
+    # Legend fills column-wise: one column per expt, one row per line style.
+    fig.legend(handles, labels, loc='outside lower center', ncol=len(conf.EXPT_SIM))
+    plt.savefig(outputs['fig'])
+
+    # Summary: day means (day 1 = first 24 h, etc.) and 10-day mean.
+    periods = {'day1': slice(0, 24), 'day5': slice(96, 120), 'day10': slice(216, 240), 'all': slice(0, 240)}
+    rows = []
+    for expt in conf.EXPT_SIM:
+        for sigma in plot_sigmas:
+            for pname, pslice in periods.items():
+                e = float(expt_eRMSE[expt].sel(sigma=sigma).isel(time=pslice).mean())
+                d = float(expt_dRMSE[expt].sel(sigma=sigma).isel(time=pslice).mean())
+                c = float(expt_closest[expt].sel(sigma=sigma).isel(time=pslice).mean())
+                rows.append(dict(expt=expt, sigma=sigma, period=pname, eRMSE=e, dRMSE=d, closest=c,
+                                 closest_over_eRMSE=c / e))
+    df = pd.DataFrame(rows)
+    print(df.to_string())
+    df.to_csv(outputs['summary'], index=False)
+
+
 def calc_autocorr_imerg_inputs(case):
     inputs = {'imerg': regrid_imerg_to_n216_outputs(case, 'cons')['output']}
     return inputs
@@ -1764,6 +1861,7 @@ rmk.add_rules([
     calc_dRMSE,
     plot_spread_error,
     plot_all_cases_spread_error,
+    plot_all_cases_closest_member,
     # calc_autocorr_imerg, calc_autocorr_expt, plot_autocorr intentionally
     # excluded: enabled = False in the remake2 original.
     calc_tcwv,
